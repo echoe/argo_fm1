@@ -83,13 +83,52 @@ static void ev_name(const track_t *t, uint32_t id, char *b)
     str_cpy(b + str_len(b), id == P_LEVEL ? "LEVEL" : id == P_GLIDE ? "GLIDE" : track_desc(t, id)->label, 12 - str_len(b));
 }
 
+/* a PRESET lock's value as a place in the list the knob walks: the engine's presets 0..np-1, then the user presets made with that
+ * engine in slot order (np..np+nu-1); a lock's value: 0..127 an engine preset, -1 - slot a user preset (motion_pset_apply) */
+static uint32_t ev_pset_nuser(const track_t *t)
+{
+    uint32_t k, n = 0;
+    for (k = 0; k < UP_SLOTS; k++)
+        n += (uint32_t)(up_used(k) && up_engine(k) == t->eng_req);
+    return n;
+}
+static int32_t ev_pset_pos(const track_t *t, int32_t v)
+{
+    int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets;
+    uint32_t k, n = 0;
+    if (v >= 0)
+        return v < np ? v : np - 1;
+    for (k = 0; k < UP_SLOTS && k < (uint32_t)(-1 - v); k++)   /* (a slot gone or another engine's: the user presets before it) */
+        n += (uint32_t)(up_used(k) && up_engine(k) == t->eng_req);
+    return np + (int32_t)n;
+}
+static int16_t ev_pset_val(const track_t *t, int32_t pos)
+{
+    int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets;
+    uint32_t k;
+    if (pos < np)
+        return (int16_t)pos;
+    pos -= np;
+    for (k = 0; k < UP_SLOTS; k++)
+        if (up_used(k) && up_engine(k) == t->eng_req && !pos--)
+            return (int16_t)(-1 - (int32_t)k);
+    return (int16_t)(np ? np - 1 : 0);
+}
+
 /* a motion record's value as text (b holds 14): a preset lock's is the preset's name (the engine's list, past its end: wrapped as it plays),
  * else the parameter's own format; sets the unit */
 static void ev_value_text(const track_t *t, uint32_t id, int32_t v, char *b, const char **unit)
 {
     if (id == MOTION_PSET) {
         const engine_t *e = ENGINES[eng_idx(t->eng_req)];
-        str_cpy(b, e->npresets ? e->presets[(uint32_t)v % e->npresets].name : "-", 14);
+        if (v < 0) {                                   /* a user preset: its name, or its slot ("U07") when it is empty / another engine's */
+            uint32_t k = (uint32_t)(-1 - v);
+            if (k < UP_SLOTS && up_used(k) && up_engine(k) == t->eng_req)
+                up_name(k, b);
+            else
+                up_slot_label(b, k < UP_SLOTS ? k : 0u);
+        } else
+            str_cpy(b, e->npresets ? e->presets[(uint32_t)v % e->npresets].name : "-", 14);
         *unit = "";
         return;
     }
@@ -437,11 +476,11 @@ static void ev_knob(uint32_t slot, int32_t s)
         motion_undo_take(t, 0x200u | slot | i << 4);   /* (a knob turned on, this record) */
         (void)motion_move(t, i, step, to, motion_base_value(t, to));
         ui.ev_id = (uint8_t)to;
-    } else if (id == MOTION_PSET) {                     /* the value of a preset lock: a preset of the track's engine */
-        int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets;
-        s = accel(EN_K1 + slot, s, np);
+    } else if (id == MOTION_PSET) {                     /* the value of a preset lock: the engine's presets, then the user presets made with it */
+        int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets, nu = (int32_t)ev_pset_nuser(t);
+        s = accel(EN_K1 + slot, s, np + nu);
         motion_undo_take(t, 0x200u | slot | i << 4);   /* (a knob turned on, this record) */
-        (void)motion_move(t, i, step, id, (int16_t)clamp(e->value + s, 0, np - 1));
+        (void)motion_move(t, i, step, id, ev_pset_val(t, clamp(ev_pset_pos(t, e->value) + s, 0, np + nu - 1)));
     } else {                                            /* the value */
         d = track_desc(t, id);
         s = accel(EN_K1 + slot, s, d->fmt == F_ENUM ? 0 : d->max - d->min);
@@ -531,6 +570,10 @@ static void ev_oct(void)
  * hits); CHANCE a TIE too (a failed roll cuts the held note). A REST or an empty step none (nothing to hear) */
 static const uint8_t SD_KIND[4] = {EVK_CHANCE, EVK_RATCH, EVK_NUDGE, EVK_VEL};
 static int sd_takes(const step_t *s, uint32_t k) { return step_on(s) || (k == EVK_CHANCE && s->time == ST_TIE); }
+/* SEQ > DETAIL 2 (ui_input.c sd2_turn, ui_draw.c, ui_graph.c graph_detail2): KNOB 1 the cursor step's PRESET lock (ui_events.c: none,
+ * the engine's presets, then the user presets made with it), 2 ACC, 3 SLD, 4 LEN (a note's length in steps). ACC, SLD and LEN are a
+ * NOTE step's (not a DRUM grid's hits: sd2_takes) */
+static int sd2_takes(const track_t *t, const step_t *s) { return !drum_track(t) && step_on(s); }
 
 /* EDIT: the record goes, a CHANCE / RATCH / NUDGE / VEL back to its default (the row below moves up) */
 static void ev_delete(void)

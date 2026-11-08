@@ -14,13 +14,13 @@ static favorites_t favorites __attribute__((section(".pool")));
 static int favorite_has(uint32_t engine, uint32_t preset)
 {
     if (engine == NENGINES)
-        return preset < UP_SLOTS && ((favorites.user >> preset) & 1u);
+        return preset < 32u && ((favorites.user >> preset) & 1u);   /* (the mask is 32 bits: user presets 33..48 have no favourite mark) */
     return engine < NENGINES && engine < FAV_ROWS && preset < 256u &&
         ((favorites.factory[engine][preset / 8u] >> (preset % 8u)) & 1u);
 }
 static int favorite_set(uint32_t engine, uint32_t preset, int on)
 {
-    if (engine > NENGINES || (engine == NENGINES ? preset >= UP_SLOTS : engine >= FAV_ROWS || preset >= 256u))
+    if (engine > NENGINES || (engine == NENGINES ? preset >= 32u : engine >= FAV_ROWS || preset >= 256u))
         return 0;
     if (favorite_has(engine, preset) == !!on) return 0;
     if (engine == NENGINES) {

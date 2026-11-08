@@ -668,8 +668,8 @@ static int user_preset_roundtrip(void)
     for (i = 0, p = 14; i < P_COUNT; i++, p += 2u)
         ok &= (int32_t)(host_wire[p] | host_wire[p + 1] << 7) - 8192 == want[i];
     for (i = 0; i < 16u; i++, p += 2u)
-        ok &= host_wire[p] == (i & 1u ? 0u : 48u + i);
-    bad += check("UP_GET returns the values and the pattern UP_PUT sent", ok);
+        ok &= host_wire[p] == 0u && host_wire[p + 1u] == 0u;
+    bad += check("UP_GET returns the values and 16 rests (a record holds no pattern since 1.7.1)", ok);
     bad += check("  .. then kind 0 and (1.2) the category: none sent, ANALOG's (OTHER)",
                  host_wire[p] == 0u && host_wire[p + 1u] == CAT_OTHER && host_wire[p + 2u] == 0xF7);
     {   /* 1.2 (Discussion #90): UP_PUT's category after the kind's 16 bytes; UP_LIST lists the categories after the slots */

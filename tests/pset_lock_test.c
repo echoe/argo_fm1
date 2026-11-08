@@ -190,6 +190,103 @@ int main(void)
             motion_end();
         }
     }
+    {   /* USER presets in the lock: a negative value is the slot (-1 - value) */
+        track_t *q;
+        int16_t base[P_COUNT];
+        uint32_t np = ENGINES[ENGI_SWARM]->npresets, ok = 1;
+        int rc;
+        char b[16];
+        const char *unit;
+        motion_up_hook = up_lock_hook;                  /* (up_boot does this on the device) */
+        ui_power_on();
+        q = TSEL;
+        set_engine_of(q, ENGI_SWARM); q->engine = q->eng_req; apply_preset_to(q, 3);
+        q->p[P_E2] = 99; q->p[P_E5] = 11; q->p[P_ATK] = 41;
+        rc = up_store(7, "MYSOUND"); ok &= (rc == 0 || rc == 3) && up_used(7);   /* (3: in RAM, no flash here) */
+        bad += check("a user preset is stored for the lock tests", ok);
+        apply_preset_to(q, 0);
+        memcpy(base, q->p, sizeof base);
+        motion_clear(q);
+        bad += check("a user preset lock (-1 - slot) is accepted", !motion_set_lock(q, 2, MOTION_PSET, -8) && !motion_set_lock(q, 3, MOTION_PSET, -64));
+        bad += check("... and -65 is not", motion_set_lock(q, 5, MOTION_PSET, -65) == 1);
+        motion_clear(q);
+        motion_set_lock(q, 2, MOTION_PSET, -8);
+        motion_set_enabled(q, 1); motion_begin();
+        motion_step(q, 1, &motion, 1);
+        bad += check("nothing before the step", !memcmp(q->p, base, sizeof base));
+        motion_step(q, 2, &motion, 1);
+        {
+            int16_t got[P_COUNT];
+            uint32_t i, same = 1;
+            up_values(up_rec(7), got);
+            for (i = 0; i < P_COUNT; i++)
+                if (i != P_VOICE && ((i < P_E0 && !param_kept(i)) || (i >= P_E0 && i < P_E0 + 8u) || (i >= P_FM1_ATK && i <= P_FM4_LEVEL)))
+                    same &= q->p[i] == got[i];
+            bad += check("its step plays the user preset's sound (every parameter a preset sets; E6 and ENV ATK differ from before)",
+                         same && q->p[P_E5] == 11 && q->p[P_ATK] == 41 && base[P_E5] != 11 && q->preset == 0u);
+        }
+        motion_step(q, 3, &motion, 1);
+        bad += check("... and the next step puts every parameter back", !memcmp(q->p, base, sizeof base));
+        motion_end(); motion_clear(q);
+        motion_set_lock(q, 2, MOTION_PSET, -10);         /* slot 9: empty */
+        motion_set_enabled(q, 1); motion_begin();
+        motion_step(q, 2, &motion, 1);
+        bad += check("an empty user slot: the step plays as it is", !memcmp(q->p, base, sizeof base));
+        motion_end(); motion_clear(q);
+        motion_set_lock(q, 2, MOTION_PSET, -8);          /* made with SWARM: not for another engine */
+        set_engine_of(q, ENGI_WAVETONE); q->engine = q->eng_req; apply_preset_to(q, 0);
+        memcpy(base, q->p, sizeof base);
+        motion_set_enabled(q, 1); motion_begin();
+        motion_step(q, 2, &motion, 1);
+        bad += check("a user preset of another engine: the step plays as it is", !memcmp(q->p, base, sizeof base));
+        motion_end(); motion_clear(q);
+        set_engine_of(q, ENGI_SWARM); q->engine = q->eng_req; apply_preset_to(q, 0);
+        bad += check("the knob's list: the engine's presets, then its user presets", ev_pset_nuser(q) == 1u && ev_pset_val(q, (int32_t)np) == -8 &&
+                     ev_pset_pos(q, -8) == (int32_t)np && ev_pset_val(q, (int32_t)np - 1) == (int16_t)(np - 1u) && ev_pset_pos(q, 5) == 5);
+        ev_value_text(q, MOTION_PSET, -8, b, &unit);
+        bad += check("a user lock shows the preset's name", !strcmp(b, "MYSOUND"));
+        ev_value_text(q, MOTION_PSET, -10, b, &unit);
+        bad += check("... an empty slot's, its label", !strcmp(b, "U10"));
+        q->user = 8;                                     /* the sound came from slot 7 (user = slot + 1) */
+        bad += check("a new PRESET lock starts at the user preset the track has", motion_base_value(q, MOTION_PSET) == -8);
+        q->user = 0;
+        bad += check("... and at its own preset otherwise", motion_base_value(q, MOTION_PSET) == (int16_t)q->preset);
+        (void)up_put(7, 0);
+    }
+    {   /* 48 user presets: the lock reaches slot 48; FM6's patches are the first 32 slots'; an old tag is moved */
+        track_t *q = TSEL;
+        int16_t base[P_COUNT];
+        uint8_t pk[FM6_PACKED];
+        uint32_t ok = 1;
+        set_engine_of(q, ENGI_SWARM); q->engine = q->eng_req; apply_preset_to(q, 3);
+        q->p[P_E5] = 12;
+        ok &= (up_store(47, "LAST") == 0 || up_store(47, "LAST") == 3) && up_used(47);
+        apply_preset_to(q, 0);
+        memcpy(base, q->p, sizeof base);
+        motion_clear(q);
+        motion_set_lock(q, 2, MOTION_PSET, -48);        /* slot 47: the last of 48 */
+        motion_set_enabled(q, 1); motion_begin();
+        motion_step(q, 2, &motion, 1);
+        ok &= q->p[P_E5] == 12 && base[P_E5] != 12;
+        motion_step(q, 3, &motion, 1);
+        ok &= !memcmp(q->p, base, sizeof base);
+        motion_end(); motion_clear(q);
+        bad += check("a user lock reaches slot 48 (-48)", ok);
+        set_engine_of(q, ENGI_FM6); q->engine = q->eng_req; apply_preset_to(q, 0);
+        bad += check("an FM6 sound is refused above slot 32 (its patch store holds 32)", up_store(40, "FM6 HIGH") == 2 && !up_used(40));
+        ok = (up_store(30, "FM6 LOW") == 0 || up_store(30, "FM6 LOW") == 3) && up_used(30) && !upf_get(30, pk);
+        bad += check("... and kept below it, its patch with it", ok);
+        {                                               /* a record converted from before 1.7.1: the patch's tag follows */
+            uint32_t was = upf.e[30].tag;
+            upf.e[30].tag = 0xA5A5A5A5u;
+            up_oldtag[30] = 0xA5A5A5A5u;
+            ok = upf_retag() == 1u && upf.e[30].tag == was && !upf_get(30, pk);
+            up_oldtag[30] = 0;
+            bad += check("a converted record's FM6 patch tag moves to the new record (the patch stays)", ok);
+        }
+        (void)up_put(30, 0);
+        (void)up_put(47, 0);
+    }
     printf("pset: %s\n", bad ? "FAILED" : "all ok");
     return bad ? 1 : 0;
 }

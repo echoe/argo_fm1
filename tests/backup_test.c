@@ -413,7 +413,7 @@ int main(void)
         b.r[4].used = UP_USED;
         b.r[4].ver = 99;                                 /* a future record */
         memcpy(b.r[4].name, "Future", 7);
-        b.r[4].p[0] = 55;
+        b.r[4].packed[0] = 55;
         bad += check("a bank with a future record version restores byte for byte",
                      put_all(6, &b, sizeof b, st_crc32(&b, sizeof b)) == 0 &&
                      st_load(OBJ_UPRESET0, &proj_wire, sizeof proj_wire) == (int)sizeof b &&

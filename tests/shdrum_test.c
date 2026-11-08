@@ -153,6 +153,42 @@ int main(int argc, char **argv)
         /* FM with LVL B 0 differs from MIX with LVL B 0 */
         fresh(0); trk[0].p[SHP_BLVL] = 0; trk[0].p[P_E2] = SHM_MIX; r0 = hit(36, 200, 0);
         trk[0].p[P_E2] = SHM_FM; trk[0].p[P_E3] = 60; r1 = hit(36, 200, 0); chk("FM (B silent) is not MIX", r0.hash != r1.hash && r1.peak > 100);
+        /* PULSE: PW 0 is the square bit for bit; the width changes the sound; PW does nothing on the other waves (CLIK 0: no noise) */
+#define PTRK(wa, wb, lb, pa, pb) do { fresh(0); trk[0].p[SHP_CLIK] = 0; trk[0].p[P_E7] = 0; trk[0].p[SHP_BLVL] = (lb); trk[0].p[P_E0] = (wa); trk[0].p[P_E1] = (wb); \
+            trk[0].p[SHP_APW] = (pa); trk[0].p[SHP_BPW] = (pb); } while (0)
+        PTRK(SHW_SQR, SHW_SIN, 0, 0, 0); r0 = hit(48, 200, 0);
+        PTRK(SHW_PULSE, SHW_SIN, 0, 0, 0); r1 = hit(48, 200, 0);
+        chk("PULSE at PW 0 is SQR", r0.hash == r1.hash);
+        PTRK(SHW_PULSE, SHW_SIN, 0, 64, 0); r0 = hit(48, 200, 0);
+        PTRK(SHW_PULSE, SHW_SIN, 0, 127, 0); r1 = hit(48, 200, 0);
+        chk("PW changes a PULSE", r0.hash != r1.hash && r0.peak > 100 && r1.peak > 100);
+        PTRK(SHW_SAW, SHW_SIN, 0, 0, 0); r0 = hit(48, 200, 0);
+        PTRK(SHW_SAW, SHW_SIN, 0, 127, 127); r1 = hit(48, 200, 0);
+        chk("PW is ignored by SAW", r0.hash == r1.hash);
+        PTRK(SHW_SIN, SHW_PULSE, 100, 0, 20); r0 = hit(48, 200, 0);
+        PTRK(SHW_SIN, SHW_PULSE, 100, 0, 100); r1 = hit(48, 200, 0);
+        chk("B PW changes a PULSE on layer B", r0.hash != r1.hash);
+        /* SYNC: B (key + TUN B) is the master: the output repeats at its period, and not at a half of it (the unsynced A's) */
+        {
+            int16_t *b = malloc(2 * 40000);
+            double e = 0, rm = 0, rh = 0, dc = 0; uint32_t i;
+            PTRK(SHW_SAW, SHW_SIN, 0, 0, 0);
+            trk[0].p[P_E2] = SHM_SYNC; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = -12; trk[0].p[P_E5] = 0;
+            trk[0].p[SHP_ADEC] = 127; trk[0].p[SHP_BDEC] = 127;
+            r0 = hit(48, 1000, b);                      /* key 48 (130.8 Hz); the master (TUN B -12) is 65.4 Hz: 674.3 samples */
+            chk("SYNC sounds", r0.peak > 1000);
+            for (i = 4000; i < 12000; i++) {
+                e += (double)b[i] * b[i];
+                rm += (double)b[i] * b[i + 674]; rh += (double)b[i] * b[i + 337]; dc += b[i];
+            }
+            printf("shdrum_test: SYNC: autocorrelation at the master period (674) %.2f, at half of it %.2f, mean %.0f\n", rm / e, rh / e, dc / 8000.0);
+            chk("SYNC repeats at B's period", rm / e > 0.7 && rm > rh + 0.2 * e);
+            chk("SYNC has no DC", fabs(dc / 8000.0) < 0.02 * r0.peak);
+            PTRK(SHW_SAW, SHW_SIN, 0, 0, 0); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = -12; trk[0].p[P_E5] = 0;
+            trk[0].p[SHP_ADEC] = 127; trk[0].p[SHP_BDEC] = 127;
+            chk("SYNC is not MIX", r0.hash != hit(48, 1000, 0).hash);
+            free(b);
+        }
         /* the sweep: the kick's start is higher than its end; no sweep: steady */
         {
             int16_t *b = malloc(2 * 22050);
@@ -186,7 +222,7 @@ int main(int argc, char **argv)
                     uint32_t b;
                     stat_t s;
                     fresh(0);
-                    trk[0].p[P_E0] = (int16_t)(c % 5); trk[0].p[P_E1] = (int16_t)((c / 5) % 5);
+                    trk[0].p[P_E0] = (int16_t)(c % SHW_COUNT); trk[0].p[P_E1] = (int16_t)((c / SHW_COUNT) % SHW_COUNT);
                     trk[0].p[P_E2] = (int16_t)xm; trk[0].p[SHP_FTYP] = (int16_t)ft;
                     for (b = 0; b < 8; b++) {
                         int16_t lo = (c >> b) & 1 ? 0 : 127;
@@ -198,7 +234,7 @@ int main(int argc, char **argv)
                     s = hit((c & 16) ? 0 : (c & 32) ? 127 : 60, 900, 0);
                     if (s.peak > 70000 || s.dc > 4000) { if (!bad2) printf("  corner xm %u ft %u c %u: peak %.0f dc %.1f\n", xm, ft, c, s.peak, s.dc); bad2++; }
                 }
-        printf("shdrum_test: corners (3 XMOD x 4 FLT x 64): %s\n", bad2 ? "FAIL" : "ok");
+        printf("shdrum_test: corners (4 XMOD x 4 FLT x 64, 6 waves): %s\n", bad2 ? "FAIL" : "ok");
         fails += bad2 != 0;
     }
 

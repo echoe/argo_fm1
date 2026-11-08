@@ -113,8 +113,8 @@ static uint32_t ed_bk_commit(void)
         obj = OBJ_SETTINGS;
     } else if (ed_bk_id == 6u || ed_bk_id == 7u) {
         const up_bank_t *p = (const up_bank_t *)raw;
-        if (ed_bk_len && (ed_bk_len != sizeof *p || p->magic != UP_BANK_MAGIC ||
-            p->rsize != sizeof(up_rec_t) || p->nslot != UP_PER_BANK)) return 2;
+        if (ed_bk_len && !((ed_bk_len == sizeof *p && p->magic == UP_BANK_MAGIC && p->rsize == sizeof(up_rec_t) && p->nslot == UP_PER_BANK) ||
+            (ed_bk_len == sizeof(up_old_bank_t) && p->magic == UP_BANK_MAGIC && p->rsize == sizeof(up_old_rec_t) && p->nslot == 16u))) return 2;   /* (an archive of before 1.7.1: up_bank_check converts it) */
         /* Unknown record versions remain inert bytes, preserving future/older bank data. */
         obj = OBJ_UPRESET0 + ed_bk_id - 6u;
     } else if (ed_bk_id == 8u) {                    /* an older archive's FM6 bank: into the restored user presets */
@@ -171,7 +171,7 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
         if (len > ED_BK_MAX || (a[1] == 0u && !proj_store_len(len)) ||
             (a[1] == 1u && len != sizeof(persist_t)) ||
             (a[1] >= 2u && a[1] <= 5u && len && !proj_store_len(len)) ||
-            ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||
+            ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t) && len != sizeof(up_old_bank_t)) ||
             (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t))) return 1;
         if (ed_flash_stop()) return 3;
         ed_bk_valid = 0; ed_bk_put = 1; ed_bk_id = a[1]; ed_bk_len = len; ed_bk_gen = ++proj_wire_gen;

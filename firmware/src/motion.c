@@ -31,7 +31,11 @@ static void motion_unguard(uint32_t f)
     (void)f;
 #endif
 }
-static void motion_pset_apply(track_t *t, uint32_t pi);   /* (below: a preset lock plays) */
+static void motion_pset_apply(track_t *t, int32_t pv);   /* (below: a preset lock plays) */
+/* a USER preset lock (a negative value: slot -1 - value): upreset.c installs this (up_boot); the tests that leave upreset.c out
+ * have none, and such a lock does nothing there. With v: slot's sound -> v[P_COUNT] when the slot is used and made with the
+ * engine track t plays (1), else 0. Without v: the slot's own patch onto t (FM6's), 1 */
+static int (*motion_up_hook)(track_t *t, uint32_t slot, int16_t *v);
 static int motion_param(uint32_t id)
 {
     if (id == MOTION_PSET)
@@ -111,8 +115,12 @@ static uint32_t motion_mask(uint32_t k, uint32_t m[(P_COUNT + 31u) / 32u])
 static int16_t motion_base_value(const track_t *t, uint32_t id)
 {
     uint32_t k = trk_index(t);
-    if (id == MOTION_PSET)
-        return (int16_t)t->preset;                      /* (a new preset lock starts at the preset the track has) */
+    if (id == MOTION_PSET) {                            /* (a new preset lock starts at the preset the track has: a user preset's slot, if its sound is one) */
+        int16_t u[P_COUNT];
+        if (t->user && motion_up_hook && motion_up_hook((track_t *)t, (uint32_t)t->user - 1u, u))
+            return (int16_t)-(int32_t)t->user;
+        return (int16_t)t->preset;
+    }
     return (motion_active[k][id / 32u] >> (id % 32u)) & 1u ? motion_base[k][id] : t->p[id];
 }
 static void motion_restore(track_t *t)
@@ -286,7 +294,7 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     for (i = 0; i < m->count; i++) {                    /* a preset lock first: the step's parameter locks then play over it */
         const motion_event_t *e = &m->event[i];
         if (e->place == (k << 6 | step) && MOTION_ID(e) == MOTION_PSET && play)
-            motion_pset_apply(t, (uint32_t)e->value);
+            motion_pset_apply(t, e->value);
     }
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
@@ -411,12 +419,26 @@ static uint32_t motion_sound_loaded(track_t *t, uint32_t from, uint32_t to)
  * per-engine slots the hooks write), but in place: no undo, no fade, the voice mode (MONO / POLY, which would need a panic) and the
  * track's own settings (param_kept) stay, the preset number shown stays. Everything it writes is marked as locked (motion_locked), so
  * the next step puts it back as for any parameter lock. Not while the engine is changing */
-static void motion_pset_apply(track_t *t, uint32_t pi)
+static void motion_pset_apply(track_t *t, int32_t pv)
 {
     const engine_t *e = ENGINES[eng_idx(t->eng_req)];
     const preset_t *pr;
-    uint32_t i, k = trk_index(t);
+    uint32_t i, k = trk_index(t), pi = (uint32_t)pv;
     uint8_t keep = t->preset;
+    if (pv < 0) {                                       /* a user preset: the same parameters a factory one writes, from the slot */
+        int16_t v[P_COUNT];
+        if (!motion_up_hook || t->engine != t->eng_req || !((motion_base_valid >> k) & 1u) ||
+            !motion_up_hook(t, (uint32_t)(-1 - pv), v))
+            return;                                     /* (an empty slot, another engine's: the step plays as it is) */
+        for (i = 0; i < P_COUNT; i++)
+            if (i != P_VOICE && ((i < P_E0 && !param_kept(i)) || (i >= P_E0 && i < P_E0 + 8u) || (i >= P_FM1_ATK && i <= P_FM4_LEVEL))) {
+                t->p[i] = v[i];
+                motion_active[k][i / 32u] |= 1u << (i % 32u);
+                motion_locked[k][i / 32u] |= 1u << (i % 32u);
+            }
+        (void)motion_up_hook(t, (uint32_t)(-1 - pv), 0);
+        return;
+    }
     if (!e->npresets || t->engine != t->eng_req || !((motion_base_valid >> k) & 1u))
         return;
     pi = preset_orig(e, pi % e->npresets);

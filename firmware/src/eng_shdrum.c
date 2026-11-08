@@ -17,14 +17,20 @@
  *     both oscillators follow the PITCH ENVELOPE: SWEP semitones above (below, if negative) the key at the hit's
  *     start, falling to the key over SWP T. WAVE B sits TUN B semitones from WAVE A.
  *
- * WAVE A / WAVE B   SIN TRI SAW SQR NOIS. Each wave is an oscillator with an envelope and a level, a layer.
+ * WAVE A / WAVE B   SIN TRI SAW SQR NOIS PULSE. Each wave is an oscillator with an envelope and a level, a layer. PULSE is a
+ *                   pulse wave whose width is the layer's PW (A PW / B PW on the LAYER pages: 0 % a square, 100 % about a
+ *                   40th of the cycle, the thin, nasal end; the default 50 % is a quarter): a SQR is always 50 %.
  * XMOD              how the layers meet: MIX adds them. FM: B modulates A's phase (index 0..16 radians over DPTH,
  *                   B's envelope shapes it: a bright attack that dulls as B dies away), A's envelope and level shape
  *                   the carrier, and B is still heard at its own LEVEL B (0 for a pure modulator). RING: DPTH
  *                   crossfades from the two layers added to their product, the ring modulation of A by B (both
  *                   enveloped, so each layer's decay is the metal's decay): the inharmonic, metallic part of a hat, a
- *                   cowbell or a clap with TUN B on a non-octave interval (square x square, +7 semitones).
- * DPTH              the XMOD amount (not used with MIX).
+ *                   cowbell or a clap with TUN B on a non-octave interval (square x square, +7 semitones). SYNC: hard
+ *                   sync, B the master and A the slave: A restarts its cycle each time B completes one, so what you hear
+ *                   has B's pitch (the key plus TUN B) and A's wave as its timbre. DPTH lifts the slave's pitch over its
+ *                   own key, up to three octaves, shaped by B's envelope: the classic sync sweep, bright at the hit's
+ *                   start, settling to the plain wave as B dies away. B is heard at LEVEL B (0 for a silent master), as in FM.
+ * DPTH              the XMOD amount (FM: the index, RING: the crossfade, SYNC: the slave's lift; not used with MIX).
  * A ATK DEC LVL     LAYER A: attack and decay times (the F_TIME table: ATK linear, DEC exponential, the time DEC shows
  *                   is the time to -40 dB) and level. LAYER B the same. The hit ends when both layers have died away.
  * TUN B             wave B's tuning from A, -24..+24 semitones (12 / 19 / 24 are the octave, fifth and double octave
@@ -60,13 +66,14 @@ enum {
     SHP_BATK, SHP_BDEC, SHP_BLVL,                              /* LAYER B */
     SHP_CLIK, SHP_FOLD, SHP_CRSH,                              /* FX 1 (with DRV, P_E7) */
     SHP_FTYP, SHP_CUT, SHP_RES, SHP_FENV,                      /* FX 2 */
+    SHP_APW, SHP_BPW,                                          /* LAYER A / B: the width of a PULSE wave (appended: the ids above keep their place) */
     SHP_END
 };
 #define SHP_N (SHP_END - SHP_AATK)
 _Static_assert(SHP_END <= P_FM4_LEVEL + 1, "SHDRUM: its extra parameters live in the FM operator slots");
 
-static const char *const N_SHD_WAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
-static const char *const N_SHD_XMOD[] = {"MIX", "FM", "RING"};
+static const char *const N_SHD_WAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS", "PULSE"};
+static const char *const N_SHD_XMOD[] = {"MIX", "FM", "RING", "SYNC"};
 static const char *const N_SHD_FTYP[] = {"OFF", "LP", "BP", "HP"};
 
 /* the descriptors of the slots above, in id order (SHP_AATK + i); range 0..127 as the slots' own (stored values fit) */
@@ -76,6 +83,7 @@ static const param_desc_t SHD_X[SHP_N] = {
     {"CLIK", F_PCT, 0, 127, 0, 0, 0},      {"FOLD", F_PCT, 0, 127, 0, 0, 0},      {"CRSH", F_PCT, 0, 127, 0, 0, 0},
     {"FLT", F_ENUM, 0, SHF_COUNT - 1, SHF_OFF, N_SHD_FTYP, 0},
     {"CUT", F_CUTOFF, 0, 127, 100, 0, 0},  {"RES", F_PCT, 0, 127, 20, 0, 0},     {"FENV", F_BIPCT, -64, 63, 0, 0, 0},
+    {"A PW", F_PCT, 0, 127, 64, 0, 0},     {"B PW", F_PCT, 0, 127, 64, 0, 0},
 };
 /* the descriptor of id for this engine: SHD_X inside its slots, else 0 */
 static const param_desc_t *shd_xdesc(uint32_t id)
@@ -108,6 +116,8 @@ static void shd_vp_load(shd_vp_t *q, const int16_t *p)
     q->cut = (uint8_t)clamp(p[SHP_CUT], 0, 127);
     q->res = (uint8_t)clamp(p[SHP_RES], 0, 127);
     q->fenv = (int8_t)clamp(p[SHP_FENV], -64, 63);
+    q->apw = (uint8_t)clamp(p[SHP_APW], 0, 127);
+    q->bpw = (uint8_t)clamp(p[SHP_BPW], 0, 127);
 }
 
 static void shd_note_on(track_t *t, voice_t *v)
@@ -194,7 +204,7 @@ static void shd_load(track_t *t, uint32_t pi)
 {
     uint32_t i;
     for (i = 0; i < SHP_N; i++)
-        t->p[SHP_AATK + i] = pi < SHD_NPRESETS ? (int16_t)SHD_PRESET_X[pi][i] : SHD_X[i].def;
+        t->p[SHP_AATK + i] = pi < SHD_NPRESETS && i < SHP_FENV - SHP_AATK + 1 ? (int16_t)SHD_PRESET_X[pi][i] : SHD_X[i].def;   /* (the PW slots: no preset sets them) */
 }
 static void shd_defaults(track_t *t)
 {

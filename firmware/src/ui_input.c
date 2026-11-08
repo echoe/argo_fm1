@@ -921,6 +921,65 @@ static void sd_turn(uint32_t slot, int32_t steps)
     else if (k == EVK_VEL && (t->step[ui.cursor].flags & SF_ACCENT))
         ui_message("ACC PLAYS 127");                    /* (kept: it plays once the ACC goes) */
 }
+/* DETAIL 2's knobs on the cursor step: KNOB 1 PRESET (a turn up from "-" starts at the preset the track plays, down past the first is
+ * "-" again: no lock), 2 ACC, 3 SLD (up on, down off), 4 LEN. One undo per knob gesture on a step (SAVE held) */
+static void sd2_turn(uint32_t slot, int32_t steps)
+{
+    track_t *t = TSEL;
+    step_t *st = &t->step[ui.cursor];
+    uint32_t i = ui.cursor;
+    if (slot == 0u) {
+        int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets, nu = (int32_t)ev_pset_nuser(t), cur, nw;
+        int16_t v;
+        int has = motion_lock_get(t, i, MOTION_PSET, &v);
+        if (!np) {
+            ui_message("NO PRESETS");
+            return;
+        }
+        cur = has ? ev_pset_pos(t, v) + 1 : 0;
+        nw = !has && steps > 0 ? ev_pset_pos(t, motion_base_value(t, MOTION_PSET)) + 1 :
+             clamp(cur + accel(EN_K1 + slot, steps, np + nu), 0, np + nu);
+        if (nw == cur)
+            return;
+        step_undo_take(t, 0x4000u | slot << 6 | i);
+        if (!nw)
+            motion_delete_event(t, i, MOTION_PSET);
+        else if (motion_set_lock(t, i, MOTION_PSET, ev_pset_val(t, nw - 1)))
+            ui_message("AUTOMATION FULL");
+        motion_undo_done(t);
+        return;
+    }
+    if (!sd2_takes(t, st)) {
+        ui_message("NO NOTE");
+        return;
+    }
+    step_undo_take(t, 0x4000u | slot << 6 | i);
+    if (slot == 3u) {
+        uint32_t was = note_len(t, i), n = note_set_len(t, i, (uint32_t)clamp((int32_t)was + steps, 1, NSTEP));
+        if (steps > 0 && n == was)
+            ui_message(i + n < (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP) ? "NOTE AHEAD" : "END OF PATTERN");
+    } else {
+        uint32_t f = slot == 1u ? SF_ACCENT : SF_SLIDE;
+        st->flags = (uint8_t)(steps > 0 ? st->flags | f : st->flags & ~f);
+    }
+    motion_undo_done(t);
+}
+/* DETAIL 2's EDIT: the step's PRESET lock gone, its ACC and SLD off; one undo */
+static void sd2_reset(void)
+{
+    track_t *t = TSEL;
+    step_t *st = &t->step[ui.cursor];
+    int16_t v;
+    if (!motion_lock_get(t, ui.cursor, MOTION_PSET, &v) && !(st->flags & (SF_ACCENT | SF_SLIDE))) {
+        ui_message("NOTHING TO RESET");
+        return;
+    }
+    step_undo_take(t, 0);
+    motion_delete_event(t, ui.cursor, MOTION_PSET);
+    st->flags = (uint8_t)(st->flags & ~(SF_ACCENT | SF_SLIDE));
+    motion_undo_done(t);
+    ui_message("STEP RESET");
+}
 /* DETAIL's EDIT: the steps' four back to 100 % / x1 / 0 / 96 (their notes stay); one undo */
 static void sd_reset(void)
 {
@@ -946,9 +1005,12 @@ static void step_edit(uint32_t slot, int32_t steps)
 {
     step_t *st = &TSEL->step[ui.cursor];
     uint32_t i;
-    if (detail_on()) {                                    /* DETAIL (1.5.1): CHANCE RATCH NUDGE VEL */
+    if (detail_on()) {                                    /* DETAIL (1.5.1): CHANCE RATCH NUDGE VEL; DETAIL 2: PRESET ACC SLD LEN */
         follow_hold();
-        sd_turn(slot, steps);
+        if (detail2_on())
+            sd2_turn(slot, steps);
+        else
+            sd_turn(slot, steps);
         return;
     }
     if (drum_track(TSEL)) {
@@ -1430,6 +1492,8 @@ static int page_tap(uint32_t b)
     if (b == B_EDIT && detail_on()) {                    /* DETAIL (1.5.1): the step's CHANCE RATCH NUDGE VEL back */
         if (chain_busy())
             ui_message("STOP TO EDIT");
+        else if (detail2_on())
+            sd2_reset();
         else
             sd_reset();
         return 1;

@@ -704,13 +704,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_str(nm, 12);
         for (i = 0; i < P_COUNT; i++)
             ed_v(u ? v[i] : 0);
-        for (i = 0; i < 16u; i++) {
-            ed_b(u ? r->note[i] & 0x7Fu : 0u);
-            ed_b(u ? r->flags[i] & 0x7Fu : 0u);
-        }
-        ed_b(u && up_grid(r));                  /* kind: 1 = a drum grid, then bit 7 of each step's */
-        for (i = 0; u && up_grid(r) && i < 16u; i++)   /* hits (bit 0) and accents (bit 1) */
-            ed_b((uint32_t)(r->note[i] >> 7) | (uint32_t)(r->flags[i] >> 7) << 1);
+        for (i = 0; i < 32u; i++)               /* the 16 steps (rests): a record holds no pattern since 1.7.1 */
+            ed_b(0u);
+        ed_b(0u);                               /* kind 0: a note pattern */
         ed_b(u ? up_cat_of(r) : 0u);            /* 1.2: the category (an older editor stops before it) */
         break;
     }

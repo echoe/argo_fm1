@@ -87,7 +87,7 @@
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
-#define UP_SLOTS 32u             /* user presets (upreset.c) */
+#define UP_SLOTS 48u             /* user presets (upreset.c; 1.7.1: 32 before) */
 
 /* ------------------------------------------------------- parameters --- */
 /* the engine interface (Felucca-Engines, MIT: engines/, a git submodule): param_desc_t and F_*, voice_t,

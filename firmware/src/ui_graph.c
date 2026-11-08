@@ -370,6 +370,54 @@ static void graph_detail(const track_t *t, uint16_t c)
         }
     }
 }
+/* SEQ > DETAIL 2: the cursor's 16 steps as four lanes, named on the left (the lane of the knob just turned in the accent): PRE the
+ * step's PRESET lock, a bar as high as its place in the list (the engine's presets, then the user presets: a user one drawn with a
+ * cap), a step with none a dot; ACC and SLD a bar on the steps that have it; LEN a note's length, a bar as high as its steps of 16.
+ * Where there is no NOTE (a rest, a tie, a DRUM grid's hits) ACC SLD LEN draw nothing. The cursor framed through the lanes, the
+ * step playing a line (as DETAIL) */
+static void graph_detail2(const track_t *t, uint16_t c)
+{
+    static const char *const NAME[4] = {"PRE", "ACC", "SLD", "LEN"};
+    static const uint8_t LY[4] = {4, 38, 62, 86}, LH[4] = {28, 18, 18, 28};
+    uint32_t i, l, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, ncol;
+    int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets, all = np + (int32_t)ev_pset_nuser(t);
+    ncol = base < len ? (len - base < 16u ? len - base : 16u) : 0u;
+    for (l = 0; l < 4u; l++) {
+        cv_rect(SD_X0, LY[l] + LH[l], (int32_t)ncol * 12 + 1, 1, T_GRID);
+        cv_text_on(8, LY[l] + LH[l] / 2 - 8, &AF_S, NAME[l], ui.hot_t && ui.hot_col == l ? T_ACCENT : T_MID, T_SURF);
+    }
+    for (i = 0; i < ncol; i++) {
+        uint32_t si = base + i;
+        const step_t *st = &seq_steps(t)[si];
+        int32_t x = SD_X0 + (int32_t)i * 12, y, h;
+        uint16_t hi = si == ui.cursor ? T_ACCENT : c;
+        int16_t pv;
+        if (si == ui.cursor)
+            cv_frame(x, 1, 13, 116, T_TEXT);
+        if (song.playing && si == t->seq_idx)
+            cv_rect(x + 6, 2, 1, 114, T_ACCENT);
+        y = LY[0]; h = LH[0];
+        if (all && motion_lock_get(t, si, MOTION_PSET, &pv)) {
+            int32_t bh = (ev_pset_pos(t, pv) + 1) * h / all;
+            cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh), 9, bh < 2 ? 2 : bh, hi);
+            if (pv < 0)
+                cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh) - 3, 9, 2, hi);       /* (the cap: a user preset) */
+        } else
+            cv_rect(x + 5, y + h - 3, 2, 2, T_DIM);
+        if (!sd2_takes(t, st))
+            continue;
+        for (l = 1; l < 4u; l++) {
+            y = LY[l]; h = LH[l];
+            if (l == 3u) {
+                int32_t bh = ((int32_t)note_len(t, si)) * h / 16;
+                cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh), 9, bh < 2 ? 2 : bh, note_len(t, si) > 1u ? hi : T_RAISE);
+            } else if (st->flags & (l == 1u ? SF_ACCENT : SF_SLIDE))
+                cv_rect(x + 2, y + 2, 9, h - 4, hi);
+            else
+                cv_rect(x + 5, y + h - 3, 2, 2, T_RAISE);
+        }
+    }
+}
 /* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
  * accent, out of the scale RAISE */
 static void graph_scale(const track_t *t, uint16_t c)
@@ -1359,8 +1407,8 @@ static uint32_t graph_signature(void)
             uint64_t lk = motion_lock_steps(trk_index(t));
             h = (h ^ (uint32_t)lk ^ (uint32_t)(lk >> 32) * 2654435761u) * 16777619u;
         }
-        if (detail_on())                             /* DETAIL: QUANTIZE (NUDGE's DIM), the lane named in the accent */
-            h = (h ^ (0xD1u + (uint32_t)t->p[P_SQNT] * 31u + (ui.hot_t ? ui.hot_col + 1u : 0u) * 977u)) * 2654435761u;
+        if (detail_on())                             /* DETAIL: QUANTIZE (NUDGE's DIM), the lane named in the accent (DETAIL 2: its own) */
+            h = (h ^ (0xD1u + (detail2_on() ? 0x5Cu : 0u) + (uint32_t)t->p[P_SQNT] * 31u + (ui.hot_t ? ui.hot_col + 1u : 0u) * 977u)) * 2654435761u;
         else if (!drum_track(t)) {                   /* the roll: its view and the keys held */
             pr_follow(t);
             h = (h ^ (proll.lo + 1u)) * 16777619u;
@@ -2544,7 +2592,9 @@ static void draw_graph(void)
             break;
         case GR_ROLL:
             cv_oy = 0;
-            if (detail_on())                          /* 1.5.1 (#199) */
+            if (detail2_on())
+                graph_detail2(t, c);
+            else if (detail_on())                     /* 1.5.1 (#199) */
                 graph_detail(t, c);
             else if (drum_track(t))
                 graph_grid(t, c);

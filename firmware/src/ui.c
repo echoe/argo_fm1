@@ -615,8 +615,12 @@ static int grid_on(void) { return !ui.home && !ui.menu && !ui.confirm && cur_pag
  * its panel their lanes (ui_graph.c graph_detail). No state of its own: the page is what says so */
 static int detail_on(void)
 {
-    return !ui.home && !ui.menu && !ui.confirm && cur_page()->scope == SC_STEP && str_eq(cur_page()->title, "DETAIL");
+    return !ui.home && !ui.menu && !ui.confirm && cur_page()->scope == SC_STEP &&
+           (str_eq(cur_page()->title, "DETAIL") || str_eq(cur_page()->title, "DETAIL 2"));
 }
+/* DETAIL 2: the same page for the cursor and the keys (detail_on); its knobs the cursor step's PRESET lock, ACC, SLD, LEN
+ * (ui_input.c sd2_turn), its panel their lanes (ui_graph.c graph_detail2) */
+static int detail2_on(void) { return detail_on() && str_eq(cur_page()->title, "DETAIL 2"); }
 /* GLO > SONG (1.2): the white keys A B C D (A3 B3 C4 D4, white places 2..5: seq.c song_key) set the selected cell's slot;
  * they do not sound there, the other keys play as anywhere (seq.c keyboard_block: song.grid 3) */
 static int song_keys_on(void) { return !ui.home && !ui.menu && !ui.confirm && !ui.layer && cur_page()->graph == GR_SONG; }

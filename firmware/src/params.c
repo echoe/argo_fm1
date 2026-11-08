@@ -239,8 +239,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DRREV] = PD("-", F_INT, 0, 0, 0),
 };
 
-/* a PRESET LOCK's "parameter" (core.h MOTION_PSET): its value is a preset index of the track's engine (the list shows its name) */
-static const param_desc_t PSET_DESC = {"PRESET", F_INT, 0, 127, 0, 0, 0};
+/* a PRESET LOCK's "parameter" (core.h MOTION_PSET): its value is a preset index of the track's engine (the list shows its name), or, negative, a user preset's slot (-1 - value) */
+static const param_desc_t PSET_DESC = {"PRESET", F_INT, -64, 127, 0, 0, 0};   /* (-1 - slot: a USER preset, 0..63) */
 
 /* the FM operator slots as SWARM / FMTONE name them (eng_swarm.c swm_xdesc, eng_fmtone.c fmt_xdesc; ported from Mini-Tone, where
  * engine_t.tdesc does it): engine index e, parameter id; 0 = not one of the engine's own (TP's descriptor then) */
@@ -545,8 +545,8 @@ static const page_t PAGES[] = {
 #if FELUCCA_SHDRUM
     /* SHDRUM only (eng_shdrum.c; ui.c page_visible: the titles that start with "SH "): its layers' envelopes and levels
      * and its effects, in the track's FM operator slots under SHDRUM's own labels (shd_xdesc) */
-    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, 0xFF}},
-    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, 0xFF}},
+    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, SHP_APW}},
+    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, SHP_BPW}},
     {"SH FX 1", FAM_EDIT, SC_TRACK, GR_NONE, {P_E7, SHP_CLIK, SHP_FOLD, SHP_CRSH}},
     {"SH FX 2", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_FTYP, SHP_CUT, SHP_RES, SHP_FENV}},
     /* DRUM with KIT SH only (eng_drum.c; ui.c page_visible: the titles that start with "SK "): the lanes' sounds and tuning */
@@ -606,6 +606,7 @@ static const page_t PAGES[] = {
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"DETAIL", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},   /* 1.5.1 (#199): the cursor step's CHANCE RATCH NUDGE VEL
                                                              * (ui.c detail_on, ui_input.c sd_turn) */
+    {"DETAIL 2", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}}, /* the cursor step's PRESET lock, ACC, SLD, LEN (ui.c detail2_on, ui_input.c sd2_turn) */
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},  /* the locks, events, CHANCE and RATCH as a
                                                                              * list, PLAY and CLEAR (ui_events.c) */
 #if FELUCCA_PATBANK

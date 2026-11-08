@@ -41,8 +41,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"LANES", H_LANES},
     {"LANES 2", H_LANES},
 #if FELUCCA_SHDRUM
-    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]LAYER B"},
-    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]FX 1"},
+    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]LAYER B"},
+    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]FX 1"},
     {"SH FX 1", "[K1]DRIVE[K2]CLICK[K3]FOLD[K4]CRUSH[EDIT]FX 2"},
     {"SH FX 2", "[K1]FILTER[K2]CUT[K3]RES[K4]FENV[EDIT]VOICE"},
     {"SK SND", "[K1]KICK[K2]SNARE[K3]CLAP[K4]HAT[EDIT]SND 2"},
@@ -68,6 +68,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
+    {"DETAIL 2", "[PRESETS]STEP[K1]PRESET, ACC, SLD, LEN"},
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"SEQUENCE", "[K1-4]TRACKS[PRESETS]CHAIN"},
     {"GEN", "[K1]DENS[K2]CHORD[K3]EVOLVE[K4]ALGO"},

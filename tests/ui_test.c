@@ -480,7 +480,7 @@ static int test_sound_loads(void)
     my_steps(&trk[0]);
     trk[0].p[P_SDIV] = 2;
     up_store(3, "MINE");
-    bad += check("a user preset keeps its pattern in the record (format unchanged)", up_has_pat(3) && up_rec(3)->note[0] == 40);
+    bad += check("a user preset keeps no pattern (since 1.7.1: the sound only)", !up_has_pat(3) && up_used(3));
     trk[0].p[P_SDIV] = 0;
     track_defaults_steps(&trk[0]);
     trk[0].step[5].note[0] = 33;
@@ -654,20 +654,12 @@ static int test_patterns(void)
                  msg_is("LOADED 12 BEAT") && str_eq(ui.msg2, "[SAVE] HOLD TO UNDO"));
     hold(B_SAVE);
     bad += check("SAVE held: the user's steps and LEN back", !memcmp(t->step, before.step, sizeof t->step) && t->p[P_SLEN] == 32);
-    /* a user preset's pattern: listed after the factory ones as U06, with its LEN DIV SWING GATE */
-    t->p[P_SDIV] = 2;
-    t->p[P_SSWING] = 40;
+    /* user presets add no phrases (a record holds no pattern since 1.7.1): the list is the factory ones */
     up_store(5, "UPAT");
-    t->p[P_SDIV] = 0;
-    t->p[P_SSWING] = 0;
-    up_store(6, "NOPAT");
-    memset(up_rec(6)->note, 0, sizeof up_rec(6)->note);   /* .. a record with no pattern: not listed */
-    bad += check("user presets with a pattern are listed after the factory ones", pat_count() == NPATTERNS + 1u);
+    bad += check("user presets are not listed in PHRASES", pat_count() == NPATTERNS);
     track_defaults_steps(t);
     turn(EN_K1, 20);                              /* (to the end of the list) */
     press(B_OCTUP);
-    bad += check("LOAD U06: its 16 steps, LEN 16 (at most), DIV and SWING", msg_is("LOADED U06 UPAT") && t->step[0].note[0] == 40 &&
-                 t->step[3].note[0] == 43 && !t->step[30].n && t->p[P_SLEN] == 16 && t->p[P_SDIV] == 2 && t->p[P_SSWING] == 40);
     /* a project's steps count as the user's */
     project_save(2);
     project_load(2);
@@ -1555,26 +1547,7 @@ static int test_categories(void)
     ok = name_on() && nm.cat == CAT_KEYS;
     press(B_OCTDN);
     bad += check("  saving a sound loaded from a user preset starts at that preset's category", ok && !name_on() && !up_used(5));
-    {   /* a record of before categories (version 2: 16-bit values) */
-        up_rec_t *r = up_rec(9);
-        int16_t v0[P_COUNT], v1[P_COUNT];
-        uint32_t c0;
-        memset(r, 0, sizeof *r);
-        r->used = UP_USED; r->ver = 2; r->engine = ENGI_DRUM; r->np = 72;
-        str_cpy(r->name, "OLD KIT", 12);
-        for (i = 0; i < 72u; i++) r->p[i] = (int16_t)(i % 100u);
-        up_bank[0].magic = UP_BANK_MAGIC; up_bank[0].rsize = sizeof(up_rec_t); up_bank[0].nslot = UP_PER_BANK;
-        c0 = up_cat(9);
-        up_values(r, v0);
-        ok = up_rename_cat(9, "OLD KIT", CAT_FX) != 1;
-        up_values(r, v1);
-        bad += check("  a version 2 record: listed by its engine (DRUM); a rename with a category makes it version 4, same sound",
-                     c0 == CAT_DRUM && ok && r->ver == UP_VER && up_cat(9) == CAT_FX && !memcmp(v0, v1, sizeof v0));
-        r->ver = 1; r->engine = ENGI_PHYS;
-        bad += check("  a version 1 PHYS record keeps its version (MODEL 2 = DUST): no category",
-                     (up_set_cat(r, CAT_PAD), r->ver == 1u && up_cat(9) == cat_of_engine(ENGI_PHYS)));
-        memset(r, 0, sizeof *r);
-    }
+    /* (a record of before categories, version 1 or 2, is converted when its bank is read: upreset_test) */
     /* PROJECT: KNOB 3 a random name */
     go_page(GR_SLOTS);
     name_open(NK_PROJ_SAVE, 1);
@@ -7928,7 +7901,7 @@ static int test_knob_accel(void)
 }
 
 /* #51 ("a melody appears when I change presets"): browsing every sound in the list (every engine's presets, then user
- * presets, one of them holding a pattern), on HOME and the PRESETS page, stopped and playing, on an empty track: no
+ * presets), on HOME and the PRESETS page, stopped and playing, on an empty track: no
  * step is written, the ARP stays off, nothing is held, the transport is not started, no message about a pattern. (In
  * 0.9 a preset carried a 16-step pattern and replaced the steps; since 1.0 only SEQ > PHRASES loads one.) */
 static int test_browse_no_pattern(void)
@@ -7940,10 +7913,10 @@ static int test_browse_no_pattern(void)
         ui_power_on();
         t = TSEL;
         my_steps(t); t->p[P_SDIV] = 2;
-        up_store(3, "MINE");                          /* a user preset that holds a pattern */
+        up_store(3, "MINE");                          /* a user preset (no pattern in a record since 1.7.1) */
         up_store(5, "PLAIN");
         track_defaults_steps(t);
-        ok &= seq_is_empty(t) && up_has_pat(3);
+        ok &= seq_is_empty(t) && up_used(3);
         if (pass & 1u) song.playing = 1;              /* playing: the other tracks run, this one is empty */
         if (pass & 2u) go_page(GR_BROWSE);
         preset_pos(&total);

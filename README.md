@@ -147,21 +147,9 @@ There is a GRAIN effect and a TAPE effect.
 
 ## Preset changing per step
 
-Within a synth type, you can set a different preset per step. To do this go to SEQ, then the AUTO page (3/4), then add a row. The last PARAM you can change is a PRESET param that lets you select different presets. This is an optional setting that is processed as though there is a settings change for the step, which is why you cannot change synth engines. This means that you can 'double up' on tracks if you want and do a bunch of weird tricks.
+Within a synth type, you can set a different preset per step. To do this go to SEQ, then the DETAIL 2 page (3/5). This is an optional setting that is processed as though there is a settings change for the step, which is why you cannot change synth engines. There are additional options there that you can also tweak.
 
 ## Todo
 
-most important:
-
--add a second DETAIL page in the SEQ visualization with PRESET settings per step and ... i dunno. effect settings? let the ai decide i guess
--add a 'SYNC' option to the SH-DRUM synth engine as an XMOD option
--let the user swap between any preset with preset swap. Preset swap is currently limited to only built-in presets, which greatly limits the sound palette.
-
-nice to haves:
-
--remove the 'PHRASES' page in SAVE, and all phrases. i don't like them
--add an option to set the pattern for the stutter effect, setting a level for each step
--add a second INSERT effect option per track
-
--remove the presets that were made 'between' presets, and add more user presets. [it's OK to move the order of parts of the firmware memory around to make this work.]
--let the user import and export patches from all of the engines with the editor
+-Manual editing of the slicer patterns instead of picking one of 16.
+-Removing the phrases, if necessary.

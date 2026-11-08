@@ -1295,6 +1295,27 @@ static void draw_columns(void)
         draw_column(3, "AMT", val, unit, a ? VAL(3u) : T_DIM, RATIO(&TP[id + 2u], a), mod_src_icon(MS_OFF));
         return;
     }
+    if (detail2_on()) {                                 /* DETAIL 2: the cursor step's PRESET lock, ACC, SLD, LEN (ui_input.c sd2_turn) */
+        const step_t *st = &seq_steps(TSEL)[ui.cursor];
+        char nb[16];
+        const char *u = "";
+        int16_t pv;
+        int has = motion_lock_get(TSEL, ui.cursor, MOTION_PSET, &pv), on = sd2_takes(TSEL, st);
+        int32_t np = (int32_t)ENGINES[eng_idx(TSEL->eng_req)]->npresets, all = np + (int32_t)ev_pset_nuser(TSEL);
+        if (has)
+            ev_value_text(TSEL, MOTION_PSET, pv, nb, &u);
+        else
+            str_cpy(nb, "-", 14);
+        draw_column(0, pv < 0 && has ? "USER" : "PRESET", nb, "", has ? VAL(0u) : T_DIM, has && all ? (ev_pset_pos(TSEL, pv) + 1) * 1000 / all : 0, ICON_AUTO);
+        draw_column(1, "ACC", on && (st->flags & SF_ACCENT) ? "ON" : "-", "", on ? VAL(1u) : T_DIM, on ? (st->flags & SF_ACCENT ? 1000 : 0) : -1, ICON_AUTO);
+        draw_column(2, "SLD", on && (st->flags & SF_SLIDE) ? "ON" : "-", "", on ? VAL(2u) : T_DIM, on ? (st->flags & SF_SLIDE ? 1000 : 0) : -1, ICON_AUTO);
+        if (on)
+            fmt_int(nb, (int32_t)note_len(TSEL, ui.cursor));
+        else
+            str_cpy(nb, "-", 14);
+        draw_column(3, "LEN", nb, on ? "STEPS" : "", on ? VAL(3u) : T_DIM, on ? ((int32_t)note_len(TSEL, ui.cursor) - 1) * 1000 / 15 : -1, ICON_AUTO);
+        return;
+    }
     if (detail_on()) {                                  /* DETAIL (1.5.1, #199): the cursor step's CHANCE RATCH NUDGE VEL;
                                                          * DIM where they do not play (ui_input.c sd_turn) */
         static const char *const SD_LABEL[4] = {"CHANCE", "RATCH", "NUDGE", "VEL"};
