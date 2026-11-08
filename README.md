@@ -12,7 +12,7 @@ Installing is at your own risk: M-VAVE's updater or the installer's **Return to 
 - Edit: [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
 - Build: [BUILDING.md](BUILDING.md)
 - Related: [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained) ·
-  [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca builds on it from 1.7.0)
+  [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
   [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
   [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
 
@@ -20,7 +20,7 @@ Installing is at your own risk: M-VAVE's updater or the installer's **Return to 
 
 Argo is built fully with generative AI, piggybacking off of the work of Felucca. As is also true with Felucca, the
 design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
-icons or artwork.
+icons or artwork. This README was initially written by AI as it edited the repo; it was then edited for clarity. (If you see something that reads in a confusing way, please feel free to open an issue.)
 
 ## Credits and licence
 
@@ -40,9 +40,9 @@ M-VAVE and FM-1 are trademarks of their respective owners. Argo is not affiliate
 
 ## No samples or engines that use samples are in this firmware
 
-No samples or engines with samples are used. This frees up space for the other features.
+No samples or engines with samples are used. This frees up space for other features; I also wanted to focus on synth sounds specifically.
 
-## Five different synth engines; one unique to this firmware, and four from other firmware
+## Five new synth engines; one unique to this firmware, four from other firmwares
 
 The synths in common with Felucca are:
 
@@ -60,8 +60,6 @@ The unique synth in this firmware is:
   - Individual AD envelope, leve, and Pulse Width (if applicable).
   - Drive/Click/Fold/Crush effects.
   - An ending LP/BP/HP filter.
-
-Drums are all DRUM-X and SHDRUM.
 
 ## Added sequences (eight per track)
 
@@ -98,15 +96,16 @@ its knobs for the selected track:
 - **ALGO** (KNOB 4): The algorithm the generative engine uses. It starts with no algorithm (full randomness), and at 127 it has an
 algorithm more suited to drums. There is also a 'Fifths' and 'Bounce' algorithm at 1/3 and 2/3 of the range of the knob.
 
-- It's not on the GEN page, but LEN on the first page controls the loop's length (up to 32 steps, at the arp's RATE; SWG, GATE and PROB apply too). The knobs are saved with the
-  sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through
-  STOP and PLAY. Record-arm a track to play GEN's notes into its sequence.
+- It's not on the GEN page, but LEN on the first arp page controls the loop's length (up to 32 steps, at the arp's RATE; SWG, GATE and PROB apply too).
+- The knobs are saved with the sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through STOP and PLAY.
+- Record-arm a track to play GEN's notes into its sequence.
 
 ## Chord Improvements
 
-Multiple chord play methods have been added.
+Multiple chord-playing methods have been added to this firmware.
 
-First, the CHORD page's CHRD has two more values, **STR3** and **STR7**: the keys turn into a chord to strum, as on a guitar.
+The CHORD page's CHRD has three new values. Two of them, **STR3** and **STR7**, use the black keys to select a chord, which changes what the white keys are.
+With that black key held, you can play the white keys as all of the notes in that chord. The LLM says it this way:
 
 - **Black keys** (F#3 .. F#5, eleven) choose the chord and make no sound: the diatonic triad (STR3) or seventh (STR7) on the scale's
   1st, 2nd, 3rd ... degree (the track's ROOT and SCALE; a chromatic scale uses the major scale of ROOT), the keys past the scale's
@@ -117,11 +116,11 @@ First, the CHORD page's CHRD has two more values, **STR3** and **STR7**: the key
   UNISON part plays the strings one at a time. MIDI notes, the arp and kits (DRUM, slices) play as with CHRD OFF.
 
 There is also a third new value for CHRD, **PLAY**, inspired by a popular chord engine VST. Every white key plays its chord, and the 
-**black keys held** with it shape the chord. The black keys make no sound. What each black key does is yours to set (below). 
+**black keys held** with it shape the chord. The black keys make no sound by themselves. You can also set what each black key does, to set it up to your liking.
 With the built in POP pack, for example, keys are set like this: 
 key 1 MIN, key 2 MIN7, key 3 7, key 4 MAJ7, key 5 SUS4, key 6 SUS2,
 key 7 DIM, key 8 +9, key 9 6, key 10 STRM, key 11 ARP. 
-The black keys controls what the white keys do, and then when you pick the white key note [CDEFGAB] it will play the associated chord, or strum the chord, etc.
+When you hold a black key and then hit a white key note, it will play that note as a chord, modified by whatever black notes you hit. So you can strum a minor 7 C chord by holding black key 1, 3, and 10, and then hitting the white C note.
 
 The actions (lowest black key first, so a later one changes what an earlier one set: MIN then 7 is a minor seventh; 7, +9 and +11
 stack):
@@ -133,31 +132,35 @@ stack):
 - Up to six tones: past that the fifth goes first, then the highest. VOIC voices the chord as it does the other chord modes.
 
 **LATCH** (SCL > CHORDS, PRESETS: right is LATCH, left is HOLD): with LATCH on a black key pressed toggles its action on and a second
-press turns it off, so the chord keeps its shape with no key held; the keys whose action is on stay lit. The chord is the latched
-actions (a key still held does not count twice). Turning LATCH off, loading a pack or loading the music clears them. LATCH is part
+press turns it off, so the chord keeps its shape with no key held; the keys whose action is on stay lit. The chord is made from the latched
+actions (a key still held does not count twice). Turning LATCH off, loading a pack, or loading the music clears them. LATCH settings are part
 of the pack, saved and loaded with it.
 
-**SCL > CHORDS** (the SCL button's third page, after SCL and CHORD) is where the black keys are set: KNOB 1 PACK, 2 KEY (which black key), 3 ACT (what it
-does), 4 SPEED (the strum, 0..200 ms between notes). The page shows all eleven keys as chips with what a C chord becomes with the one
-edited. Packs are what the black keys do and the strum speed together: six are built in (POP, JAZZ, SUS, EXT, EASY, HARP) and four
-are yours (USER1..4): turning KNOB 1 loads a pack at once (a "*" says it was changed since), and **OCT+ saves** what the black keys
-do now into the user pack picked. The packs and the keys' setting are saved with the music (project SAVE, RESTORE LAST), in the
-sequence banks' flash.
+**SCL > CHORDS** (the SCL button's third page, after SCL and CHORD) is where the black keys described above are actually set: KNOB 1 PACK, 2 KEY (which black key you're editing), 3 ACT (the action: what it
+does), 4 SPEED (for strum, 0..1000 ms between notes). The page shows all eleven keys. 
+Packs are what the black keys do and the strum speed together: six are built in (POP, JAZZ, SUS, EXT, EASY, HARP).
+USER 1 through USER 4 can be changed and saved by the user: turning KNOB 1 loads a pack at once (a "*" says it was changed since).
+**OCT+ saves** what the black keys do now into the user pack you pick. 
+The packs and the keys' setting are saved with the music (project SAVE, RESTORE LAST), in the sequence bank's flash.
 
 ## Additional INSERT effects
 
-We've added a GRAIN effect and a TAPE effect. This is in lieu of the GRANULAR engine being removed.
+We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed.
 
 ## Preset changing per step
 
-Within a synth type, you can set a different preset per step. To do this go to SEQ, then the DETAIL 2 page (3/5). This is an optional setting that is processed as though there is a settings change for the step, which is why you cannot change synth engines. There are additional options there that you can also tweak.
+You can set a different preset per step. The preset needs to be of the same synth engine as the track is set to.
+To do this go to SEQ, then the DETAIL 2 page (3/5), and you can see an option for the step you selected on page 1. You can also set the specific action individually on the 4th page of the SEQ menu.
+This is an optional setting that is processed as though there is a settings change for the step.
+... There are also other things you can tweak per step on that page that aren't the presets, but the reason the page is there is to have a quicker way to swap presets.
 
-## 48 presets
+## 48 user presets
 
-We've removed the saved patterns in presets in order to add additional presets. Sadly the last 16 presets can't hold FM6 patches, but they can hold patches for the other synths.
+We've removed the saved patterns from presets in order to have more space to add additional presets. 
+Note: The last 16 presets can't hold FM6 patches.
 
 ## Todo
 
 -Manual editing of the slicer patterns instead of picking one of 16.
--Removing the phrases, if necessary.
--Update to Felucca 1.8.2.
+-Removing phrases, if possible.
+-Update to Felucca 1.8.2 once it's out of beta.
