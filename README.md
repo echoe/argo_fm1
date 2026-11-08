@@ -161,4 +161,5 @@ Note: The last 16 presets can't hold FM6 patches.
 -Manual editing of the slicer patterns instead of picking one of 16.
 -Removing phrases, if possible.
 -Additional re-labeling of things from Felucca to Argo [on the installer specifically].
+-Figure out how to put on the screen that you delete a step by pressing the edit button, in the SEQ screen. It took me forever to find that in Felucca and it would be good.
 -Update to Felucca 1.8.2 once it's out of beta.
