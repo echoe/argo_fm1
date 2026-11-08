@@ -53,6 +53,7 @@ typedef struct {
     uint8_t pk[UPF_PK];
 } upf_ent_t;
 #define UPF_SLOTS 32u                            /* the patches it holds: the user presets 1..32 (more would not fit a storage object) */
+_Static_assert(UPF_SLOTS <= 32u, "upf_t.used is a 32-bit mask");
 typedef struct {
     uint32_t magic;
     uint16_t ver, nslot;                         /* 1, UPF_SLOTS */

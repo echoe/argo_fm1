@@ -136,6 +136,8 @@ static void shk_load(track_t *t, uint32_t pi)
         t->p[SKP_SND0 + i] = i < 8u ? SHK_KITS[k][i] : SKD[i].def;
 }
 static void shk_defaults(track_t *t) { shk_load(t, 0); }
+#else
+#include "presets_drum.h"                     /* (DRUM_NX: counted below, with no SH kits) */
 #endif
 /* the model kits' pieces where a lane plays another than its own (the lane's name): 1 TOM -> CONGA, 2 RIM -> CLAVE,
  * 4 BELL -> CYM */
@@ -379,10 +381,12 @@ static void drum_note_on(track_t *t, voice_t *v)
     }
 #endif
 #if FELUCCA_DRUMX
+#if FELUCCA_SHDRUM
     if (L->role == DVT_SHK) {                            /* (a SH kit's drum was here) */
         memset(&L->x, 0, sizeof L->x);
         L->role = 0;
     }
+#endif
     L->st = (int8_t)st;
     L->owner = (uint8_t)(i + 1u);                        /* (its last voice, if another, ends: drum_amp) */
     v->s[0] = (int32_t)lane;
@@ -604,7 +608,7 @@ static const preset_t DRUM_PRESETS[] = {
 #endif
 };
 _Static_assert(sizeof DX_KITS / sizeof DX_KITS[0] == 9u, "a preset a DRUM-X kit");
-_Static_assert(NELEM(DRUM_PRESETS) == 9u + DRUM_NX + 3u, "DRUM_NX (presets_drum.h) counts presets_drum.inc");
+_Static_assert(NELEM(DRUM_PRESETS) == 9u + DRUM_NX + (FELUCCA_SHDRUM ? 3u : 0u), "DRUM_NX (presets_drum.h) counts presets_drum.inc");
 #else
 static const preset_t DRUM_PRESETS[] = {
     {"DRUM KIT", DRUM_KIT_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), PAT(12)},   /* (core.h: SAMPLE PERC's too) */

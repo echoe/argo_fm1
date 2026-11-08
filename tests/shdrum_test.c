@@ -365,7 +365,15 @@ int main(int argc, char **argv)
             fresh(pi);
             memset(buf, 0, sizeof buf);
             (void)hit(PNOTE_OF(pi), NMAXB, buf);
-            snprintf(path, sizeof path, "%s/shdrum_%s.wav", dir, PN[pi]);
+            {                                           /* (the presets past the first eight: their own names, as file names) */
+                char nm[32];
+                uint32_t j;
+                snprintf(nm, sizeof nm, "%s", PN_OF(pi));
+                for (j = 0; nm[j]; j++)
+                    if (!((nm[j] >= 'a' && nm[j] <= 'z') || (nm[j] >= 'A' && nm[j] <= 'Z') || (nm[j] >= '0' && nm[j] <= '9')))
+                        nm[j] = '_';
+                snprintf(path, sizeof path, "%s/shdrum_%s.wav", dir, nm);
+            }
             f = fopen(path, "wb");
             if (f) {
                 wav_hdr(f, NMAXB * CTL);

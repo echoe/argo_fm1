@@ -1219,7 +1219,10 @@ static void draw_columns(void)
         str_cpy(u, "/", 8);
         fmt_int(u + 1, (int32_t)total);
         draw_column(0, "No.", val, u, VAL(0u), -1, ICON_NONE);
-        draw_column(1, "ENG", ENGINES[TSEL->eng_req]->name, "", VAL(1u), -1, engine_icon(ENGINES[TSEL->eng_req]->name));
+        {
+            const char *en = ENGINES[TSEL->eng_req]->name;
+            draw_column(1, "ENG", str_len(en) > 7 ? eng_abbr(en) : en, "", VAL(1u), -1, engine_icon(en));   /* (WAVETONE: its 4-letter tag) */
+        }
         draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
         draw_column(3, "LIST", list_name(list_mode()), "", VAL(3u), -1, ICON_X_FOLDER);
         return;

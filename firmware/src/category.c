@@ -19,6 +19,11 @@ static uint32_t cat_of_engine(uint32_t e) { return e == 10u || e == 13u || e == 
  * only; SAMPLE's retired PERC, past SMP_NPRESETS): its engine's (cat_of_engine). tests/ui_test.c checks every string
  * against its engine's preset count. A preset's category is a hint for browsing: nothing else reads it */
 #include "presets_cat.h"                 /* PCAT_<ENGINE>: the categories of the presets tools/gen_presets.py added ("" = none) */
+#if FELUCCA_SHDRUM
+#define PCAT_DRUM_SH "DDD"                       /* (the SH kits: SHDRUM builds only) */
+#else
+#define PCAT_DRUM_SH ""
+#endif
 static const char *const PRESET_CAT[18] = {
     "LPBPBKLBULLP",              /* 0 ANALOG: SAW LEAD, SOFT PAD, SQR BASS, PWM STR, ACID, SINE KEY, RAVE, SUB BASS,
                                   * PLUCK, BRASS, WIND, STRINGS */
@@ -33,7 +38,7 @@ static const char *const PRESET_CAT[18] = {
     "UUUPUDDPU",                 /* 9 PHYS: BELL TREE, MARIMBA, PLUCK, BOWED METAL, KALIMBA, HAND DRUM, TOMS, DRONE
                                   * STRING, HARP */
 #if FELUCCA_DRUMX
-    "DDDDDDDDD" PCAT_DRUM "DDD",              /* 10 DRUM (DRUM-X): DRUM-X, 909 CLUB, 808 BOOM, LOFI DUST, INDUSTRIAL, ACOUSTIC, DUB ROOTS, TECHNO RAW, BREAKS; SH KIT, SH PUNCH, SH DEEP */
+    "DDDDDDDDD" PCAT_DRUM PCAT_DRUM_SH,       /* 10 DRUM (DRUM-X): DRUM-X, 909 CLUB, 808 BOOM, LOFI DUST, INDUSTRIAL, ACOUSTIC, DUB ROOTS, TECHNO RAW, BREAKS; SH KIT, SH PUNCH, SH DEEP (with SHDRUM) */
 #elif FELUCCA_SHDRUM
     "DDDDDDD",                   /* 10 DRUM: DRUM KIT; 1.5.6: DEEP KIT, TIGHT KIT, PERC KIT; SH KIT, SH PUNCH, SH DEEP */
 #else

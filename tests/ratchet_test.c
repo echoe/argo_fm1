@@ -238,31 +238,20 @@ static int presets(void)
     step_set_ratchet(&t->step[2], 3);
     t->step[5].flags = SF_ACCENT;
     step_set_ratchet(&t->step[5], 4);
-    memset(&r, 0, sizeof r);
-    up_pat_from(&r, t->step);
-    track_defaults_steps(t);
-    load_pat16(t, r.note, r.flags);
-    bad += check("user preset note pattern: x3 and an accented x4 stored in its flags and loaded back",
+    /* a user preset holds no pattern since 1.7.1: storing and loading one leave the steps (ratchets too) as they are */
+    up_store(3, "RAT");
+    up_load(3);
+    bad += check("user preset: the steps stay on a load (x3, an accented x4; no pattern in the record)",
                  step_ratchet(&t->step[2]) == 3u && step_ratchet(&t->step[5]) == 4u && t->step[5].flags & SF_ACCENT &&
-                 step_ratchet(&t->step[0]) == 1u && r.flags[2] == 2u << SF_RATCH_SH);
-    k = 0;                                           /* UP_PUT: slot, engine, name, values, 16 x (note, flags) */
+                 step_ratchet(&t->step[0]) == 1u && !up_has_pat(3));
+    k = 0;                                           /* UP_PUT: slot, engine, name, values, 16 x (note, flags): the pattern is dropped */
     a[k++] = 3; a[k++] = (uint8_t)t->eng_req;
     memcpy(a + k, "RAT", 4); k += 4;
     for (i = 0; i < P_COUNT; i++) { a[k++] = (uint8_t)((t->p[i] + 8192) & 127); a[k++] = (uint8_t)((t->p[i] + 8192) >> 7); }
-    for (i = 0; i < 16u; i++) { a[k++] = r.note[i]; a[k++] = r.flags[i]; }
+    for (i = 0; i < 16u; i++) { a[k++] = (uint8_t)(48 + i); a[k++] = (uint8_t)(i == 2u ? 2u << SF_RATCH_SH : 0u); }
     n = k;
     memset(&r, 0, sizeof r);
-    bad += check("  UP_PUT keeps a pattern's ratchet", !up_parse(a, n, &r, &slot) && r.flags[2] == 2u << SF_RATCH_SH &&
-                 r.flags[5] == (SF_ACCENT | 3u << SF_RATCH_SH));
-    set_engine_of(t, ENGI_DRUM);                     /* a drum grid record: no room, x1 */
-    t->engine = t->eng_req;
-    track_defaults_steps(t);
-    t->step[0] = (step_t){{0}, 0, ST_NOTE, 0, 100, 1u << DV_KICK};
-    step_set_ratchet(&t->step[0], 2);
-    up_store(4, "GRID");
-    up_pat_load(t, 4);
-    bad += check("  a DRUM grid record loads its hits x1", up_grid(up_rec(4)) && t->step[0].hit == 1u << DV_KICK &&
-                 step_ratchet(&t->step[0]) == 1u);
+    bad += check("  UP_PUT still takes a frame with a pattern (ratchet flags in it), keeps the sound", !up_parse(a, n, &r, &slot) && up_valid(&r));
     return bad;
 }
 

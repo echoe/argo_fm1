@@ -125,7 +125,7 @@ static uint32_t ed_bk_commit(void)
         return upf_save() == 2 ? 4u : 0u;
     } else if (ed_bk_id == 9u) {                    /* the user presets' FM6 patches (0: none) */
         const upf_t *u = (const upf_t *)raw;
-        if (ed_bk_len && (ed_bk_len != sizeof *u || !upf_valid(u) || (u->used >> (UP_SLOTS - 1u) >> 1))) return 2;
+        if (ed_bk_len && (ed_bk_len != sizeof *u || !upf_valid(u))) return 2;   /* (the 32-bit used mask has no bit past the 32 patch slots) */
         if (ed_bk_len) memcpy(&upf, raw, sizeof upf); else upf_empty();
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */

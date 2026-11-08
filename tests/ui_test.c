@@ -1051,7 +1051,7 @@ static int test_actions(void)
     bad += check("PATTERNS: OCT- goes HOME (the octave stays)", ui.home && song.octave == 2);
     /* TOOLS: CLRSQ and INIT are picked, not done, by their knobs */
     my_steps(t);
-    go_title("TOOLS");
+    go_title("CLEAR");
     bad += check("TOOLS: nothing picked, OCT+ dark", act_cols() == 15u && act_col() == 0u && oct_leds_seen(0) == 1u);
     turn(EN_K1, 3);
     bad += check("KNOB 1 picks CLEAR, the steps stay; OCT+ breathes", ui.act == 1u && !seq_is_empty(t) &&
@@ -1911,20 +1911,15 @@ static int test_information(void)
 {
     uint16_t header[240 * H_HEAD], footer[240 * 19], battery[240 * H_HEAD];
     track_t sounds[NTRK];
-    int bad = 0, quiet = 1;
-    uint32_t x, y;
+    int bad = 0;
+    uint32_t x;
     ui_power_on();
-    memcpy(sounds, trk, sizeof sounds);
+    memcpy(sounds, trk, sizeof sounds);   /* (no QR code in this firmware's ABOUT: nothing to check there) */
     hold(B_HOME);
     ui.menu_sel = MI_ABOUT;
     press(B_OCTUP);
     ui_draw();
     bad += check("ABOUT opens one document with scrollable license text and credits", ui.menu == 2 && !ui.menu_scroll && menu_scroll_max() > MENU_DOC_H);
-    for (y = 146; y < 220; y++)
-        for (x = 158; x < 232; x++)
-            if (x < 166 || x >= 224 || y < 154 || y >= 212)
-                quiet &= host_screen[y * 240 + x] == swap16(UI_QR_LIGHT);
-    bad += check("ABOUT QR keeps its complete white quiet zone above the fixed footer", quiet);
     memcpy(header, host_screen, sizeof header);
     memcpy(footer, host_screen + 221 * 240, sizeof footer);
     turn(EN_PRESET, 3);
@@ -2489,7 +2484,7 @@ static int test_chain(void)
                  chain_config.row[0].repeat == 16);
     for (k = chain_config.count; k < CHAIN_ROWS; k++) { turn(EN_K1, 1); turn(EN_K3, 1); }
     bad += check("SONG append row stays bounded at 16", chain_config.count == CHAIN_ROWS && chain_valid(&chain_config));
-    go_title("TOOLS"); turn(EN_K4, 1); press(B_OCTUP);
+    go_title("CLEAR"); turn(EN_K4, 1); press(B_OCTUP);
     bad += check("CLEAR SONG requires explicit confirmation", ui.confirm == CF_CLEAR_SONG && chain_config.count == CHAIN_ROWS);
     press(B_OCTDN);
     bad += check("cancel preserves the full song", chain_config.count == CHAIN_ROWS);
@@ -2644,7 +2639,7 @@ static int test_presets_knob(void)
             }
         }
     }
-    bad += check("#92 PRESETS on STEP (and 1.5.1's DETAIL): the step cursor; the sound and the steps stay", cur_ok && n_cur == 2u);
+    bad += check("#92 PRESETS on STEP (and 1.5.1's DETAIL, 1.7.1's DETAIL 2): the step cursor; the sound and the steps stay", cur_ok && n_cur == 3u);
     bad += check("#94 PRESETS on USER, PROJECT, PHRASES, SONG, AUTOMATION: the selection (KNOB 1's); nothing loaded", sel_ok);
     bad += check("#94 PRESETS on TOOLS does nothing", tools_ok);
     bad += check("#94 PRESETS elsewhere (EDIT, ENV, LFO, FX, SCL, ARP, MIXER, GLOBAL, ...): the next sound, the steps stay",
@@ -2683,7 +2678,7 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173; 1.6.1: CHORDS moved to SCL's end) */
+    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "CLEAR", "USER"};   /* (1.5, #173; 1.6.1: CHORDS moved to SCL's end) */
     int bad = 0, ok = 1;
     uint32_t i, n0;
     step_t ref[NSTEP], want;
@@ -4292,7 +4287,7 @@ static int test_bughunt_ui(void)
     }
     /* 6: TOOLS: each column its own ready check; nothing to do says so (not STOP TO EDIT) */
     ui_power_on();
-    go_title("TOOLS"); frame();
+    go_title("CLEAR"); frame();
     chain_defaults(&chain_config);                      /* no song rows */
     turn(EN_K1 + 2, 1);                                 /* DELETE ROW */
     press(B_OCTUP);
@@ -6849,6 +6844,8 @@ static int test_seq_tools(void)
     press(B_SEQ); frames(320);
     ok = str_eq(cur_page()->title, "DETAIL") && msg_is("HOLD [SEQ] QUICK");   /* (1.5.1, #199) */
     press(B_SEQ); frames(320);
+    ok &= str_eq(cur_page()->title, "DETAIL 2");                               /* (1.7.1: PRESET ACC SLD LEN) */
+    press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS && str_eq(cur_page()->title, "AUTOMATION");
     press(B_SEQ); frames(320);
     ok &= str_eq(cur_page()->title, "SEQUENCE");                               /* (1.6) */
@@ -6856,10 +6853,11 @@ static int test_seq_tools(void)
     ok &= str_eq(cur_page()->title, "STEP");
     press(B_SEQ); frames(320);
     press(B_SEQ); frames(320);
+    press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS;
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_SEQS && str_eq(cur_page()->title, "SEQUENCE");   /* 1.6: the fourth page */
-    bad += check("1.2: a tap on STEP: DETAIL (1.5.1), AUTOMATION, SEQUENCE (1.6), then STEP again (four SEQ pages; the hint until the layer "
+    bad += check("1.2: a tap on STEP: DETAIL (1.5.1), DETAIL 2, AUTOMATION, SEQUENCE (1.6), then STEP again (five SEQ pages; the hint until the layer "
                  "was opened)", ok);
     go_title("ENV"); frame();
     press(B_SEQ); frames(320);
@@ -7207,6 +7205,8 @@ static int test_layer_lock(void)
     ok = str_eq(cur_page()->title, "STEP") && !ui.lock;
     press(B_SEQ); frames(400);
     ok &= str_eq(cur_page()->title, "DETAIL") && !ui.lock && !ui.layer;   /* (1.5.1) */
+    press(B_SEQ); frames(400);
+    ok &= str_eq(cur_page()->title, "DETAIL 2") && !ui.lock && !ui.layer;   /* (1.7.1) */
     press(B_SEQ); frames(400);
     ok &= str_eq(cur_page()->title, "AUTOMATION") && !ui.lock && !ui.layer;
     press(B_SEQ);

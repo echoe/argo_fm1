@@ -429,7 +429,8 @@ static int chord_is_at(const track_t *t, uint32_t root, const int *iv)     /* ex
             return 0;
     return ngated(t) == n;
 }
-static void run_blocks(uint32_t n) { while (n--) events_block(CTL); }
+/* n blocks of 128 samples (the timings below were written for CTL 128; CTL is 32 now) */
+static void run_blocks(uint32_t n) { n = n * 128u / CTL; while (n--) events_block(CTL); }
 static int play(void)
 {
     int bad = 0, ok;

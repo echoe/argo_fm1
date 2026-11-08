@@ -546,7 +546,7 @@ else
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
     run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
     for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test midi_drift_test; do
-        f=; case $t in editor_test|backup_test) f=$SMPF;; esac   # (the user sample slots: SMPF)
+        f=; case $t in editor_test|backup_test|robust_test) f=$SMPF;; esac   # (the user sample slots: SMPF)
         $SCC $f -o "$A/$t" tests/$t.c -lm
         run "ASan/UBSan: $t" "$A/$t"
     done
@@ -556,8 +556,6 @@ else
     run "ASan/UBSan fuzz: editor SysEx and raw USB-MIDI packets (20000, seed 7)" "$A/fuzz_ed" 20000 7
     $SCC -o "$A/fuzz_proj" tests/fuzz_proj.c -lm
     run "ASan/UBSan fuzz: project stores -> import -> restore -> render (5000, seed 13)" "$A/fuzz_proj" 5000 13
-    $SCC $SMPF -o "$A/robust_test" tests/robust_test.c -lm   # (the user sample slots: SMPF)
-    run "ASan/UBSan: robust_test" "$A/robust_test"
     $SCC $SMPF -o "$A/fuzz_smp" tests/fuzz_smp.c -lm
     run "ASan/UBSan fuzz: user sample slot headers -> scan -> SAMPLE / GRAIN / SLICE (1000, seed 17)" "$A/fuzz_smp" 1000 17
 fi
