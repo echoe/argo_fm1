@@ -82,23 +82,20 @@ locks (up to 64 records while it is not the one playing); DIV, SWING, GATE, QUAN
 
 ## A generative mode within ARP
 
-The arp MODE has a last value, **GEN**: the track plays by itself while the music plays (PLAY starts it on its first step,
-STOP silences it), notes of its scale, and the keys play as they do with the arp OFF. **ARP > GEN** (the third ARP page) has
-its knobs for the selected track:
+The arp MODE has a last value, **GEN**: the track plays by itself while the music plays (PLAY starts it on its first step, STOP silences it).
+This doesn't affect the current sequence so the generated notes will play at the same time as sequence notes if the sequence is filled.
+Everything that affects the ARP also affects this generative mode - for instance, it only plays notes as set in the SCL mode you can access in the SEL button menu.
 
-- **DENS** (KNOB 1): This controls how many note events are created. Turning it up adds notes to the same loop and turning it down
-  takes them away; 0 plays nothing, 100 % every step.
-- **CHORD** (KNOB 2): 0 plays single notes. From 1 a growing share of the steps are chords (all of them from about 50 %) and the
-  chords get richer after that: a fifth or a third, then triads and their suspensions, sevenths, then 9ths and quartal stacks (up to four notes).
-  All of them are built from the scale's own notes.
-- **EVOLVE** (KNOB 3): how much the loop changes after each play: 0 repeats it exactly; a little moves a few notes a step
-  or two in the scale (now and then a new chance, chord or loudness); 100 % changes nearly every step each loop.
-- **ALGO** (KNOB 4): The algorithm the generative engine uses. It starts with no algorithm (full randomness), and at 127 it has an
-algorithm more suited to drums. There is also a 'Fifths' and 'Bounce' algorithm at 1/3 and 2/3 of the range of the knob.
+**ARP > GEN** (the third ARP page) has these knobs for the selected track:
+- **DENS** (KNOB 1): This controls how many note events are created. Turning it up adds notes to the same loop and turning it down takes them away; 0 plays nothing, 100 % makes a note on every step.
+- **CHORD** (KNOB 2): 0 plays single notes. From 1 a growing share of the steps are chords. All of the notes are chords from halfway through.
+  The chords get richer after that: a fifth or a third, then triads and their suspensions, sevenths, then 9ths and quartal stacks (up to four notes).
+- **EVOLVE** (KNOB 3): how much the loop changes after each play. 0 repeats it exactly; a little moves a few notes a step or two in the scale (now and then a new chance, chord or loudness); 100 % changes nearly every step each loop.
+- **ALGO** (KNOB 4): The algorithm the generative engine uses. It starts with no algorithm (full randomness). At 33% it has a 'Fifths' algorithm, at 67% a 'Bounce' algorithm, and at 100% it's a 'DRUMS' algorithm.
 
-- It's not on the GEN page, but LEN on the first arp page controls the loop's length (up to 32 steps, at the arp's RATE; SWG, GATE and PROB apply too).
+- To change the length of the generated loop, you need to change the length of the underlying sequence. Hold SEQ and you can change LEN there - it only generates up to 32 steps though, at the arp's RATE. SWG, GATE and PROB apply too.
 - The knobs are saved with the sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through STOP and PLAY.
-- Record-arm a track to play GEN's notes into its sequence.
+- Record-arm a track to record the generated notes into the underlying sequence if it makes something you really like!
 
 ## Chord Improvements
 
@@ -163,4 +160,5 @@ Note: The last 16 presets can't hold FM6 patches.
 
 -Manual editing of the slicer patterns instead of picking one of 16.
 -Removing phrases, if possible.
+-Additional re-labeling of things from Felucca to Argo [on the installer specifically].
 -Update to Felucca 1.8.2 once it's out of beta.
