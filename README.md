@@ -42,7 +42,7 @@ M-VAVE and FM-1 are trademarks of their respective owners. Argo is not affiliate
 
 No samples or engines with samples are used. This frees up space for the other features.
 
-## Five different Synth engines; one unique to this branch, and four picked from other firmware
+## Five different synth engines; one unique to this firmware, and four from other firmware
 
 The synths in common with Felucca are:
 
@@ -52,28 +52,28 @@ Synths from other firmwares are:
 - SWARM, FM-TONE, WAVETONE: Engines from the Mini-tone firmware, modeled after the Digitone II's synth engines.
 - DRUM-X: A drum engine from the Jiant firmware, modeled after Microtonic.
 
-The unique synth to this firmware is:
+The unique synth in this firmware is:
 - SH-TONE: A drum engine unique to this firmware, modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
-  - Two oscillators that can be one of five waves. Individual envelope and pitches.
-  - One setting to either MIX, FM, or RING the oscillators.
-  - An ending envelope.
-  - Some simple effects - crush, fold, etc.
+  - Two oscillators that can be SIN, TRI, SAW, SQR, NOISE, and PULSE.
+  - Either MIX, FM, RING, or SYNC the two oscillators.
+  - Sweep pitch and time, Osc B pitch, and Drive.
+  - Individual AD envelope, leve, and Pulse Width (if applicable).
+  - Drive/Click/Fold/Crush effects.
+  - An ending LP/BP/HP filter.
+
+Drums are all DRUM-X and SHDRUM.
 
 ## Added sequences (eight per track)
 
 Each track plays one of eight sequences. A sequence has its own steps, its own LEN and its own automation and parameter
 locks (up to 64 records while it is not the one playing); DIV, SWING, GATE, QUANTIZE and the sound stay the track's.
 
-- **SEQ > SEQUENCE** (the fourth SEQ page, after STEP, DETAIL and AUTOMATION): KNOB 1..4 pick the sequence, 1..8, of tracks 1..4.
-- **MENU > SYSTEM > SEQ SWITCH**: NOW (the default) switches at once, the playhead keeps its step; END, while the music
-  plays, waits for the last step of the sequence playing, so the new one starts from its first step (the waiting one shows
-  on the SEQUENCE page and "T1 NEXT 3" says it; choosing the one playing calls it off). Stopped, a switch is always at once.
-  Not while a song plays.
+- **SEQ > SEQUENCE** (the ending SEQ page: KNOB 1..4 pick the sequence, 1..8, of tracks 1..4.
+- **MENU > SYSTEM > SEQ SWITCH**: NOW (the default) switches patterns at once; END waits for the last step of the sequence playing.
 - **CHAIN** (SEQ > SEQUENCE, PRESETS): turn PRESETS right to chain the selected track's sequence (the one playing, or the one
-  waiting), left to take it out of the chain. Only the sequences you chained play one after the other, in order, the last back
-  to the first; a sequence you did not chain loops by itself, and so does a single chained one. It advances on the last step of
-  each pass while the music plays. A chained cell shows a bar at its left, the card "x3" (how many are chained), and the
-  footer, where the sound's name is (PRESETS is not the sound on this page), "CHAIN ON" / "CHAIN OFF" for the selected sequence.
+  waiting), left to take it out of the chain. The sequences you chain play one after the other in order. A sequence you did not chain loops by itself.
+  A chained cell shows a bar at its left, the card "x3" (how many are chained), and the footer, where the sound's name is
+  (PRESETS is not the sound on this page), "CHAIN ON" / "CHAIN OFF" for the selected sequence.
 - **SONG**: PRESETS turns the sequence the selected cell plays: 0 (as saved: the one the project was saved on, as every song
   before) or 1..8 of that project's track. The PAT card says "S3", the line under the grid "NAME SEQ 3", and the footer says
   what PRESETS does ("PRESETS SEQ 3", or "SAVED"). A song holds up to six such chosen sequences ("TOO MANY SEQ" at PLAY
@@ -82,30 +82,31 @@ locks (up to 64 records while it is not the one playing); DIV, SWING, GATE, QUAN
   keeps the music's. They live in the flash the user sample slots had, which builds with `FELUCCA_PATBANK=1` (the default) do not
   have. A song plays each project's sequence as it was saved.
 
-## Generative mode within the arpeggiator
+## A generative mode within ARP
 
-The arp's MODE has a last value, **GEN**: the track plays by itself while the music plays (PLAY starts it on its first step,
+The arp MODE has a last value, **GEN**: the track plays by itself while the music plays (PLAY starts it on its first step,
 STOP silences it), notes of its scale, and the keys play as they do with the arp OFF. **ARP > GEN** (the third ARP page) has
 its knobs for the selected track:
 
-- **DENS** (KNOB 1): how many steps of the loop play. A step plays when its own chance is below DENS, so turning it up adds
-  notes to the same loop and turning it down takes them away; 0 plays nothing, 100 % every step.
+- **DENS** (KNOB 1): This controls how many note events are created. Turning it up adds notes to the same loop and turning it down
+  takes them away; 0 plays nothing, 100 % every step.
 - **CHORD** (KNOB 2): 0 plays single notes. From 1 a growing share of the steps are chords (all of them from about 50 %) and the
-  chords get richer: a fifth or a third, then triads and their suspensions, sevenths, then 9ths and quartal stacks (up to four notes).
+  chords get richer after that: a fifth or a third, then triads and their suspensions, sevenths, then 9ths and quartal stacks (up to four notes).
   All of them are built from the scale's own notes.
-- **EVOLVE** (KNOB 3): how much the loop changes each time it comes round: 0 repeats it exactly; a little moves a few notes a step
+- **EVOLVE** (KNOB 3): how much the loop changes after each play: 0 repeats it exactly; a little moves a few notes a step
   or two in the scale (now and then a new chance, chord or loudness); 100 % changes nearly every step each loop.
 - **ALGO** (KNOB 4): The algorithm the generative engine uses. It starts with no algorithm (full randomness), and at 127 it has an
 algorithm more suited to drums. There is also a 'Fifths' and 'Bounce' algorithm at 1/3 and 2/3 of the range of the knob.
 
-LEN is the loop's length (up to 32 steps, at the arp's RATE; SWG, GATE and PROB apply too). The page draws the loop as it is
-made: a bar a step, as high as its note, a mark over the chords, a line under the step playing. The knobs are saved with the
-sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through
-STOP and PLAY. Record-arm a track to play GEN's notes into its sequence.
+- It's not on the GEN page, but LEN on the first page controls the loop's length (up to 32 steps, at the arp's RATE; SWG, GATE and PROB apply too). The knobs are saved with the
+  sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through
+  STOP and PLAY. Record-arm a track to play GEN's notes into its sequence.
 
 ## Chord Improvements
 
-The CHORD page's CHRD has two more values, **STR3** and **STR7**: the keys turn into a chord to strum, as on a guitar.
+Multiple chord play methods have been added.
+
+First, the CHORD page's CHRD has two more values, **STR3** and **STR7**: the keys turn into a chord to strum, as on a guitar.
 
 - **Black keys** (F#3 .. F#5, eleven) choose the chord and make no sound: the diatonic triad (STR3) or seventh (STR7) on the scale's
   1st, 2nd, 3rd ... degree (the track's ROOT and SCALE; a chromatic scale uses the major scale of ROOT), the keys past the scale's
@@ -115,10 +116,12 @@ The CHORD page's CHRD has two more values, **STR3** and **STR7**: the keys turn 
 - **VOIC** voices the chord (CLOSE, OPEN, INV1, INV2, +OCT's bass string), **TRN** and the octave buttons move it. A MONO, LEGATO or
   UNISON part plays the strings one at a time. MIDI notes, the arp and kits (DRUM, slices) play as with CHRD OFF.
 
-There is also a third new value for CHRD, **PLAY**: every white key plays a chord (its own note, on the track's scale as the keys are; plain major
-by default) and the **black keys held** with it shape the chord. The black keys make no sound. What each black key does is yours to
-set (below); with the built in POP pack, for example: key 1 (F#3) MIN, key 2 MIN7, key 3 7, key 4 MAJ7, key 5 SUS4, key 6 SUS2,
-key 7 DIM, key 8 +9, key 9 6, key 10 STRM, key 11 ARP. The chord is the one held when the white key goes down.
+There is also a third new value for CHRD, **PLAY**, inspired by a popular chord engine VST. Every white key plays its chord, and the 
+**black keys held** with it shape the chord. The black keys make no sound. What each black key does is yours to set (below). 
+With the built in POP pack, for example, keys are set like this: 
+key 1 MIN, key 2 MIN7, key 3 7, key 4 MAJ7, key 5 SUS4, key 6 SUS2,
+key 7 DIM, key 8 +9, key 9 6, key 10 STRM, key 11 ARP. 
+The black keys controls what the white keys do, and then when you pick the white key note [CDEFGAB] it will play the associated chord, or strum the chord, etc.
 
 The actions (lowest black key first, so a later one changes what an earlier one set: MIN then 7 is a minor seventh; 7, +9 and +11
 stack):
@@ -143,13 +146,18 @@ sequence banks' flash.
 
 ## Additional INSERT effects
 
-There is a GRAIN effect and a TAPE effect.
+We've added a GRAIN effect and a TAPE effect. This is in lieu of the GRANULAR engine being removed.
 
 ## Preset changing per step
 
 Within a synth type, you can set a different preset per step. To do this go to SEQ, then the DETAIL 2 page (3/5). This is an optional setting that is processed as though there is a settings change for the step, which is why you cannot change synth engines. There are additional options there that you can also tweak.
 
+## 48 presets
+
+We've removed the saved patterns in presets in order to add additional presets. Sadly the last 16 presets can't hold FM6 patches, but they can hold patches for the other synths.
+
 ## Todo
 
 -Manual editing of the slicer patterns instead of picking one of 16.
 -Removing the phrases, if necessary.
+-Update to Felucca 1.8.2.
