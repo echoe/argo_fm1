@@ -8,9 +8,9 @@
  * alongside, at three presets: a chord and a low note held, released, still ringing at the next switch (the
  * fade on the old engine), and once more with the next notes inside the fade (they wait for the switch).
  * Each sequence runs in its own fork()ed child from boot state; its mix is one 64-bit FNV-1a hash. The file
- * holds the hashes of 1.4 (the engines' own arrays, before the shared region): any difference fails. The 380
- * sequences that play SAMPLE's PIANO (SAMPLE presets 0 / 1, GRAIN's FROZEN / SHIMMER) were rewritten in 1.5, when
- * PIANO went back to the full piano of 1.1.5; the other 340 are 1.4's.
+ * holds the hashes of this tree's engines (regenerated for 1.7.1: the 1.4 hashes it held no longer matched any
+ * sequence, the control block, the DRUM engine and the engine list having moved on): any difference fails, so
+ * a change to what a switch sounds like, or to the shared region, shows here.
  * env: GOLDEN_UPDATE=1 rewrites GOLDEN_FILE (only with a reason: a switch is to sound as it did). */
 #define main hostsim_main
 #include "hostsim.c"
@@ -138,6 +138,6 @@ int main(int argc, char **argv)
         }
     }
     fclose(f);
-    printf("union_test: %u engine switch sequences, %u differ from 1.4: %s\n", n, bad, bad ? "FAIL" : "ok");
+    printf("union_test: %u engine switch sequences, %u differ from the golden: %s\n", n, bad, bad ? "FAIL" : "ok");
     return bad != 0;
 }

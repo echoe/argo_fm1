@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Build Felucca: the app, the update loader and an installable .fwsc package.
+"""Build Argo (Felucca-based): the app, the update loader and an installable .fwsc package.
 
   tools/build.py [--release X.Y[-suffix]]
 
 Outputs in build/: felucca.bin (app), loader/ota.bin (update loader),
-felucca.fwsc (package). A release build (--release X.Y) writes felucca-X.Y.fwsc and a folder
+argo.fwsc (package). A release build (--release X.Y) writes argo-X.Y.fwsc and a folder
 release-X.Y/ with the package, the app, SHA256SUMS, the sample attribution and the licence files.
 See BUILDING.md for the toolchain and the SDK.
 
@@ -108,6 +108,8 @@ def generate():
             [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"]]
     if os.environ.get("FELUCCA_SMPENG") == "1" or os.environ.get("FELUCCA_SAMPLE") == "1":   # the sample engines' data (retired by default: core.h)
         cmds.append([tools / "gen_samples.py", GEN / "felucca_samples.h"])
+    if os.environ.get("FELUCCA_ADPCM") == "1":   # the ADPCM engine's waves (off in Argo: core.h)
+        cmds.append([tools / "gen_adpcm.py", GEN / "felucca_adpcm.h"])
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -205,7 +207,7 @@ def build_app():
     flags = [*CFLAGS, *HAL_INC, "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SMPENG", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_SLICE", "FELUCCA_PATBANK", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_ADPCM"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -390,14 +392,14 @@ def main():
     ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string vX.Y")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
-    name = "felucca.fwsc"
+    name = "argo.fwsc"
     if a.release:                   # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
         m = re.fullmatch(r"(\d)\.(\d)(?:\.\d){0,2}(-[A-Za-z0-9]+)?", a.release)
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z, X.Y.Z.W or X.Y-suffix, one digit each")
         PRODUCT = "FM-1_9" + m[1] + m[2]
         VERSION = "v" + a.release.lower()      # e.g. v1.0, v1.1-rc1
-        name = f"felucca-{a.release}.fwsc"
+        name = f"argo-{a.release}.fwsc"
     if not (FW / "engines" / "src" / "felucca_engine.h").exists():
         raise SystemExit("firmware/engines is empty: the Felucca-Engines submodule "
                          "(git submodule update --init, or clone with --recurse-submodules)")

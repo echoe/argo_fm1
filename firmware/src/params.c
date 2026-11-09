@@ -55,21 +55,29 @@ static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", 
 static const char *const N_DASH[] = {"--"};
 static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL"};   /* G_RTYPE: the reverb bus's model (fx.c) */
 static const char *const N_GO[] = {"--", "GO"};
-static const char *const N_SLCR[] = {"OFF", "GATE", "STUT", "GRAIN"};      /* SL_OFF .. SL_GRAIN (slicer.c) */
+static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};      /* SL_OFF .. SL_STUT (slicer.c; a stored 3, the retired GRAIN, loads as OFF: param_fit) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 /* the INSERT's types (1.5, fx.c IT_*; append-only: stored). Its three values A B C mean what the type says (ins_desc) */
-static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"};
+static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "GRAIN", "TAPE"};
 /* CRUSH: BITS 1..16 and RATE (the held sample's rate, fx.c INS_HOLD) over the range in 16 even parts (0-terminated) */
 static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                                       "16", 0};
 static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2k", "2.8k", "3.7k", "4.4k", "5.5k",
                                       "7.4k", "8.8k", "11k", "15k", "22k", "44k", 0};
+/* GRAIN: SIZE in ms (16 even parts, fx.c IG_SIZE) and PITCH in semitones (25 even parts, IG_RATIO; 64 is 0) */
+static const char *const N_ISIZE[] = {"5", "6", "7", "9", "11", "13", "16", "20", "24", "29", "35", "43", "52", "63", "76",
+                                      "93", 0};
+static const char *const N_IPITCH[] = {"-12", "-11", "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0", "+1",
+                                       "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", 0};
 /* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels).
  * Append-only (stored values keep their meaning): S&H SLEW and DEPTH (#132) came after EXPR and E8; VEL and TIME
  * (1.5.6, #213: at the note) after DEPTH */
 static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"};
 static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
                                      "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"};
+/* 1.8: AFTERTOUCH SENS, the keys' pressure (keytouch.c): OFF (the keys send none; the routing still takes MIDI's), 1 the
+ * firmest lean for full pressure .. 10 the lightest */
+static const char *const N_ATSNS[] = {"OFF", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", FELUCCA_SAMPLE ? "SAMPLE" : "-", "VOICE", "TRIO", "WHEEL",
                                              FELUCCA_GRAIN ? "GRAIN" : "-", "PHYS", "DRUM", "NOISE", "FM6",
                                              FELUCCA_SLICE ? "SLICE" : "-",   /* ("-": a retired engine's number, ENG_FM4_GONE) */
@@ -85,8 +93,12 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
 #if FELUCCA_WAVETONE
                                              "WAVETONE",
 #endif
+#if FELUCCA_ADPCM
+                                             "ADPCM",
+#endif
 };
 
+static const char *const N_SLOT[] = {"A", "B", "C", "D", 0};   /* G_SLOT 1..4 (F_INT: the names split its range) */
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
 
@@ -175,22 +187,29 @@ static const param_desc_t TP[P_COUNT] = {
     [P_IMIX] = PD("MIX", F_PCT, 0, 127, 127),
     [P_FTYPE] = PE("TYPE", N_FTYPE, 0),           /* 1.5 (#104): ANALOG's filter, LP = as before (eng_analog.c) */
     [P_ESYNC] = PE("ESYNC", N_ONOFF, 0),          /* 1.5 (#175): OFF = ATK DEC REL in ms, as before (voice.c esync) */
+    /* 1.8 AFTERTOUCH: the track's aftertouch (the keys', MIDI's) to DEST by AMT, a modulation slot of its own (mod.c);
+     * DEST OFF = as before */
+    [P_ATSNS] = PE("AT", N_ATSNS, 0),
+    [P_ATDST] = PE("ATDST", N_MDST, 0),
+    [P_ATAMT] = PD("ATAMT", F_BIPCT, -64, 63, 0),
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
- * LPF, the swept ones RATE DEPTH FDBK; OFF TP's own */
+ * LPF, the swept ones RATE DEPTH FDBK, GRAIN SIZE PITCH SPRAY, TAPE DRIVE WOW TONE; OFF TP's own */
 #define PU(l, f, df, n, u) {l, f, 0, 127, df, n, u}
-static const param_desc_t INS_DESC[3][3] = {
+static const param_desc_t INS_DESC[5][3] = {
     {PU("DRIVE", F_PCT, 64, 0, 0), PU("TONE", F_CUTOFF, 96, 0, 0), PU("LEVEL", F_DB, 96, 0, 0)},
     {PU("BITS", F_INT, 64, N_IBITS, 0), PU("RATE", F_INT, 96, N_IRATE, "Hz"), PU("LPF", F_CUTOFF, 96, 0, 0)},
     {PU("RATE", F_LFOHZ, 64, 0, 0), PU("DEPTH", F_PCT, 96, 0, 0), PU("FDBK", F_PCT, 96, 0, 0)},
+    {PU("SIZE", F_INT, 64, N_ISIZE, "ms"), PU("PITCH", F_INT, 64, N_IPITCH, "st"), PU("SPRAY", F_PCT, 48, 0, 0)},
+    {PU("DRIVE", F_PCT, 40, 0, 0), PU("WOW", F_PCT, 40, 0, 0), PU("TONE", F_CUTOFF, 100, 0, 0)},
 };
 #undef PU
 static const param_desc_t *ins_desc(int32_t type, uint32_t k)
 {
     if (type <= 0 || type >= (int32_t)NELEM(N_ITYPE))
         return &TP[P_IA + k];
-    return &INS_DESC[type < 5 ? 0 : type == 5 ? 1 : 2][k];   /* (IT_SOFT .. IT_FUZZ, IT_CRUSH, the swept ones) */
+    return &INS_DESC[type < 5 ? 0 : type == 5 ? 1 : type == 9 ? 3 : type == 10 ? 4 : 2][k];   /* (IT_SOFT .. IT_FUZZ, IT_CRUSH, the swept ones, IT_GRAIN, IT_TAPE) */
 }
 
 static const param_desc_t GP[G_COUNT] = {
@@ -215,7 +234,7 @@ static const param_desc_t GP[G_COUNT] = {
      * stored with the project as before. (was "--": stored 0 = CH1-4, as MIDI IN always was) */
     [G_ROUTE] = PE("ROUT", N_ROUTE, 0),
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
-    [G_SLOT] = PD("SLOT", F_INT, 1, 4, 1),
+    [G_SLOT] = {"SLOT", F_INT, 1, 4, 1, N_SLOT, 0},   /* 1.8: A..D as the list, the header and SONG (values 1..4) */
     [G_NAME] = PE("NAME", N_DASH, 0),
     [G_LOAD] = PE("LOAD", N_GO, 0),
     [G_SAVE] = PE("SAVE", N_GO, 0),
@@ -232,8 +251,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DRREV] = PD("-", F_INT, 0, 0, 0),
 };
 
-/* a PRESET LOCK's "parameter" (core.h MOTION_PSET): its value is a preset index of the track's engine (the list shows its name) */
-static const param_desc_t PSET_DESC = {"PRESET", F_INT, 0, 127, 0, 0, 0};
+/* a PRESET LOCK's "parameter" (core.h MOTION_PSET): its value is a preset index of the track's engine (the list shows its name), or, negative, a user preset's slot (-1 - value) */
+static const param_desc_t PSET_DESC = {"PRESET", F_INT, -64, 127, 0, 0, 0};   /* (-1 - slot: a USER preset, 0..63) */
 
 /* the FM operator slots as SWARM / FMTONE name them (eng_swarm.c swm_xdesc, eng_fmtone.c fmt_xdesc; ported from Mini-Tone, where
  * engine_t.tdesc does it): engine index e, parameter id; 0 = not one of the engine's own (TP's descriptor then) */
@@ -325,6 +344,8 @@ static int32_t enum_orig(const param_desc_t *d, int32_t v)
  * bank slot: 9..40 (1.4.1's B1..B32; 1.0.2's B1..B27 were 8..34) is 8, OWN, and the patch comes with what is loaded */
 static int32_t param_fit(const param_desc_t *d, int32_t v)
 {
+    if (d->names == N_SLCR && v > d->max)               /* the SLICER's GRAIN (3) became the INSERT's: here OFF, not STUT */
+        return 0;
     v = clamp(v, d->min, d->max);
     if (d->names == N_FM6_PATCH)
         return v > (int32_t)FM6_OWN ? (int32_t)FM6_OWN : v;
@@ -459,7 +480,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         *unit = "st";
         break;
     case F_ENUM:
-        str_cpy(val, d->names[v < d->min ? d->min : v > d->max ? d->max : v], 6);
+        str_cpy(val, d->names[v < d->min ? d->min : v > d->max ? d->max : v], 7);
         if (d->unit)
             *unit = d->unit;
         break;
@@ -468,10 +489,10 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         *unit = "BPM";
         break;
     case F_NOTE:
-        str_cpy(val, N_NOTE[v % 12], 6);
+        str_cpy(val, N_NOTE[v % 12], 7);
         break;
     case F_ONOFF:
-        str_cpy(val, N_ONOFF[v ? 1 : 0], 6);
+        str_cpy(val, N_ONOFF[v ? 1 : 0], 7);
         break;
     case F_STEPS:
         fmt_int(val, v);
@@ -482,7 +503,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
             uint32_t k = 0;                           /* split evenly over the names (engine desc hooks) */
             while (d->names[k])
                 k++;
-            str_cpy(val, d->names[(uint32_t)(clamp(v, d->min, d->max) - d->min) * k / (uint32_t)(d->max - d->min + 1)], 6);
+            str_cpy(val, d->names[(uint32_t)(clamp(v, d->min, d->max) - d->min) * k / (uint32_t)(d->max - d->min + 1)], 7);
         } else {
             fmt_int(val, v);
         }
@@ -536,8 +557,8 @@ static const page_t PAGES[] = {
 #if FELUCCA_SHDRUM
     /* SHDRUM only (eng_shdrum.c; ui.c page_visible: the titles that start with "SH "): its layers' envelopes and levels
      * and its effects, in the track's FM operator slots under SHDRUM's own labels (shd_xdesc) */
-    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, 0xFF}},
-    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, 0xFF}},
+    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, SHP_APW}},
+    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, SHP_BPW}},
     {"SH FX 1", FAM_EDIT, SC_TRACK, GR_NONE, {P_E7, SHP_CLIK, SHP_FOLD, SHP_CRSH}},
     {"SH FX 2", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_FTYP, SHP_CUT, SHP_RES, SHP_FENV}},
     /* DRUM with KIT SH only (eng_drum.c; ui.c page_visible: the titles that start with "SK "): the lanes' sounds and tuning */
@@ -578,17 +599,17 @@ static const page_t PAGES[] = {
     {"OP LEVEL", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_LEVEL, P_FM2_LEVEL, P_FM3_LEVEL, P_FM4_LEVEL}},
     {"VOICE", FAM_EDIT, SC_TRACK, GR_NONE, {P_VOICE, P_GLIDE, P_GLMODE, P_PRIO}},
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
-    {"VOICE 3", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, 0xFF, 0xFF, 0xFF}},   /* #148: SPREAD */
+    {"VOICE 3", FAM_EDIT, SC_TRACK, GR_NONE, {P_SPRD, P_ATSNS, P_ATDST, P_ATAMT}},   /* #148: SPREAD; 1.8: AFTERTOUCH */
     /* 1.2 (Discussion #153): a family's pages go round in this order, a tap of its button each (ui.c open_family) */
     {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's only page (1.2; up to 1.1.5 SEQ's) */
     /* SAVE's taps (1.5, #173): USER (SAVE from another page: the quick save, SAVE OCT+ OCT+), PRESETS (the engines and
-     * sounds one tap on; up to 1.4.1 the last), PHRASES, PROJECT, TOOLS */
+     * sounds one tap on; up to 1.4.1 the last), PHRASES, PROJECT, TOOLS. TOOLS renamed as CLEAR so it's obvious when you're using it what it does */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"PHRASES", FAM_SAVE, SC_GLOBAL, GR_PATS, {0xFF, 0xFF, 0xFF, 0xFF}},    /* pattern loader: PAT LOAD (ui.c pat_load);
                                                                              * the tap after PRESETS (up to 1.1.5 SEQ's) */
     {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
-    {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_TOOLS, {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
+    {"CLEAR", FAM_SAVE, SC_GLOBAL, GR_TOOLS, {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
 #if FELUCCA_PATBANK
@@ -597,6 +618,7 @@ static const page_t PAGES[] = {
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"DETAIL", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},   /* 1.5.1 (#199): the cursor step's CHANCE RATCH NUDGE VEL
                                                              * (ui.c detail_on, ui_input.c sd_turn) */
+    {"DETAIL 2", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}}, /* the cursor step's PRESET lock, ACC, SLD, LEN (ui.c detail2_on, ui_input.c sd2_turn) */
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},  /* the locks, events, CHANCE and RATCH as a
                                                                              * list, PLAY and CLEAR (ui_events.c) */
 #if FELUCCA_PATBANK

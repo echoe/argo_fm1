@@ -52,25 +52,27 @@ typedef struct {
     uint32_t tag;                                /* upf_tag of the record it belongs to */
     uint8_t pk[UPF_PK];
 } upf_ent_t;
+#define UPF_SLOTS 32u                            /* the patches it holds: the user presets 1..32 (more would not fit a storage object) */
+_Static_assert(UPF_SLOTS <= 32u, "upf_t.used is a 32-bit mask");
 typedef struct {
     uint32_t magic;
-    uint16_t ver, nslot;                         /* 1, UP_SLOTS */
+    uint16_t ver, nslot;                         /* 1, UPF_SLOTS */
     uint32_t used;                               /* bit k: e[k] holds a patch */
     uint32_t rsv;
-    upf_ent_t e[UP_SLOTS];
+    upf_ent_t e[UPF_SLOTS];
 } upf_t;
 _Static_assert(sizeof(upf_t) == 3728u, "user preset FM6 patches layout (at most ST_PAYLOAD_MAX, 3840)");
-_Static_assert(sizeof(up_rec_t) == 192u && sizeof(((up_rec_t *)0)->name) == 12u, "upf_tag: the name at bytes 4..15");
+_Static_assert(sizeof(up_rec_t) == 156u && sizeof(((up_rec_t *)0)->name) == 12u, "upf_tag: the name at bytes 4..15");
 static upf_t upf __attribute__((section(".pool")));
 
-static int upf_valid(const upf_t *u) { return u->magic == UPF_MAGIC && u->ver == 1u && u->nslot == UP_SLOTS; }
+static int upf_valid(const upf_t *u) { return u->magic == UPF_MAGIC && u->ver == 1u && u->nslot == UPF_SLOTS; }
 
 static void upf_empty(void)
 {
     memset(&upf, 0, sizeof upf);
     upf.magic = UPF_MAGIC;
     upf.ver = 1;
-    upf.nslot = UP_SLOTS;
+    upf.nslot = UPF_SLOTS;
 }
 
 static uint32_t upf_tag(const up_rec_t *r)       /* FNV-1a of the record without its name (bytes 4..15) */
@@ -83,7 +85,10 @@ static uint32_t upf_tag(const up_rec_t *r)       /* FNV-1a of the record without
     return h;
 }
 
-static int upf_fm6(uint32_t k) { return up_used(k) && up_rec(k)->engine == ENGI_FM6; }
+static int upf_fm6(uint32_t k) { return k < UPF_SLOTS && up_used(k) && up_rec(k)->engine == ENGI_FM6; }
+/* an FM6 sound (a DIGITAL record plays as FM6 too): it needs a slot below UPF_SLOTS (up_put) */
+static int upf_rec_fm6_engine(uint32_t e) { return e == ENGI_FM6 || !eng_ok(e); }
+static int upf_rec_fm6(const up_rec_t *r) { return upf_rec_fm6_engine(r->engine); }
 
 /* a 128-byte packed record's 7-bit bytes, 8 to 7 bytes (UPF_PK) and back (the voice bank too, fm6_vbank.c) */
 static void upf_pk_get(const uint8_t *d, uint8_t *pk)
@@ -117,7 +122,7 @@ static void upf_pk_put(const uint8_t *pk, uint8_t *d)
 /* slot k's patch -> pk (128 bytes), 0 = it has one */
 static int upf_get(uint32_t k, uint8_t *pk)
 {
-    if (k >= UP_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !upf_fm6(k) ||
+    if (k >= UPF_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !upf_fm6(k) ||
         upf.e[k].tag != upf_tag(up_rec(k)))
         return 1;
     upf_pk_get(upf.e[k].pk, pk);
@@ -128,7 +133,7 @@ static int upf_get(uint32_t k, uint8_t *pk)
 static void upf_set(uint32_t k, const uint8_t *pk)
 {
     uint8_t v[FP_SIZE + 1u], c[FM6_PACKED];
-    if (k >= UP_SLOTS)
+    if (k >= UPF_SLOTS)
         return;
     if (!upf_valid(&upf))
         upf_empty();
@@ -162,7 +167,7 @@ static uint32_t upf_migrate(const fm6_bank_t *b)
     uint32_t k, moved = 0;
     if (!upf_valid(&upf))
         upf_empty();
-    for (k = 0; k < UP_SLOTS; k++) {
+    for (k = 0; k < UPF_SLOTS; k++) {
         const up_rec_t *r = up_rec(k);
         uint8_t pk[FM6_PACKED];
         int32_t s;
@@ -177,12 +182,28 @@ static uint32_t upf_migrate(const fm6_bank_t *b)
     return moved;
 }
 
+/* a record converted from a bank of before 1.7.1 has its patch tagged with the old record's hash: now the new record's;
+ * 1 when one was changed (the store is then written) */
+static uint32_t upf_retag(void)
+{
+    uint32_t k, n = 0;
+    for (k = 0; k < UPF_SLOTS; k++)
+        if (up_oldtag[k] && ((upf.used >> k) & 1u) && upf_fm6(k) && upf.e[k].tag == up_oldtag[k]) {
+            upf.e[k].tag = upf_tag(up_rec(k));
+            n++;
+        }
+    return n;
+}
+
 static void upf_boot(void)                       /* up_boot, after the user preset banks */
 {
 #if FELUCCA_FLASH
     st_hdr_t h;
-    if (flash_ok && st_load(OBJ_UPFM6, &upf, sizeof upf) == (int)sizeof upf && upf_valid(&upf))
+    if (flash_ok && st_load(OBJ_UPFM6, &upf, sizeof upf) == (int)sizeof upf && upf_valid(&upf)) {
+        if (upf_retag())
+            (void)upf_save();
         return;
+    }
     upf_empty();
     if (flash_ok && st_current(OBJ_FM6BANK, &h) >= 0 && h.len == sizeof(fm6_bank_t) &&
         fm6_bank_valid((const fm6_bank_t *)st_buf)) {

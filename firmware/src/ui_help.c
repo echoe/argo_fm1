@@ -41,8 +41,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"LANES", H_LANES},
     {"LANES 2", H_LANES},
 #if FELUCCA_SHDRUM
-    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]LAYER B"},
-    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]FX 1"},
+    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]LAYER B"},
+    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]FX 1"},
     {"SH FX 1", "[K1]DRIVE[K2]CLICK[K3]FOLD[K4]CRUSH[EDIT]FX 2"},
     {"SH FX 2", "[K1]FILTER[K2]CUT[K3]RES[K4]FENV[EDIT]VOICE"},
     {"SK SND", "[K1]KICK[K2]SNARE[K3]CLAP[K4]HAT[EDIT]SND 2"},
@@ -57,17 +57,18 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"OPERATOR 2", H_FMOP},
     {"VOICE", "[K1]POLY, MONO[K2]GLIDE"},
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
-    {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
+    {"VOICE 3", "[K1]SPREAD[K2]AFTERTOUCH F3-C5"},
     {"SONG", "[K1]SECTION[KEYS]A-D[PRESETS]SEQ"},
     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"PROJECT", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (1.5.5, #199: ERASE) */
-    {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
+    {"PROJECT", "[K2]ERASE[K3]LOAD[K4]SAVE"},   /* (1.5.5, #199: ERASE; 1.8: LOAD) */
+    {"CLEAR", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
-    {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
-    {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
+    {"ARP 2", "[K3]HOLD[K4]ORDER[ARP]ARP"},   /* (1.8: as its card) */
+    {"STEP", "[REC]WRITE[K1]STEP[SEQ]DETAIL"},   /* (1.5.1: SEQ to DETAIL; 1.8: the keys write once armed) */
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
+    {"DETAIL 2", "[K1]PRESET[K2]ACC[K3]SLD[K4]LEN"},
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"SEQUENCE", "[K1-4]TRACKS[PRESETS]CHAIN"},
     {"GEN", "[K1]DENS[K2]CHORD[K3]EVOLVE[K4]ALGO"},
@@ -77,7 +78,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 };
 #define H_HOME "[PRESETS]SOUND[HOME]HOLD: MENU"
 #define H_LEVELS "[K1-4]T1-T4 LEVEL[HOME]MIXER"
-#define H_GRID "[KEYS]STEPS[K2]LANE[SEQ]RATCH"
+#define H_GRID "[KEYS]STEPS[K2]LANE[SEQ]DETAIL"
 /* a layer's (LAYER_*): what its footer row (LAYERS[].foot) does not say */
 static const char *const HELP_LAYER[LAYER_N] = {
     "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",

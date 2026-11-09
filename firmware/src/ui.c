@@ -7,6 +7,8 @@
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
+static int project_new(void);
+static int proj_changed(void);
 static int project_used(uint32_t slot);
 static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
@@ -180,7 +182,7 @@ static struct {
     uint8_t hot_col, hot_t;      /* column whose knob was just turned (drawn white) */
     uint8_t menu;                /* 0 off, 1 list, 2 about + credits, 3 info (1.2) (HOME held) */
     uint8_t menu_sel;            /* MENU: the row (menu_items.c MI_*; its tab MI_TAB), kept while the device runs */
-    uint8_t menu_row[5];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
+    uint8_t menu_row[6];         /* MENU: the row last picked in each tab, from its first (ALGORITHM comes back to it) */
     uint16_t menu_scroll;        /* continuous ABOUT + CREDITS position, pixels */
     uint32_t menu_sig, home_t0;  /* HOME press time (btn_hold) */
     uint8_t force;               /* full redraw pending */
@@ -235,9 +237,11 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND };
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
+       CF_CLEAR_ALL, CF_LOAD_PROJ, CF_LEARN_CLEAR };
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
-                                   * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
+                                   * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190);
+                                   * MENU > SYSTEM > CLEAR ALL (1.8, #266); PROJECT LOAD over changes not saved (1.8) */
 
 /* MENU > DISPLAY > SCREEN OFF (1.1.5): after a while with no input on the panel the screen goes dark (the backlight
  * stays on: lcd.c lcd_power)
@@ -475,7 +479,8 @@ static void ui_say(const char *a, const char *b)
     str_cpy(ui.msg, a, sizeof ui.msg);
     n = str_len(ui.msg);
     str_cpy(ui.msg + n, b, sizeof ui.msg - n);
-    ui.msg_t = 40;
+    n = str_len(ui.msg);
+    ui.msg_t = (uint8_t)(n > 25u ? 90u : 40u + 2u * n);   /* (1.8: longer words stay longer, ~0.7..1.5 s) */
     ui.msg2[0] = 0;
 }
 
@@ -615,8 +620,12 @@ static int grid_on(void) { return !ui.home && !ui.menu && !ui.confirm && cur_pag
  * its panel their lanes (ui_graph.c graph_detail). No state of its own: the page is what says so */
 static int detail_on(void)
 {
-    return !ui.home && !ui.menu && !ui.confirm && cur_page()->scope == SC_STEP && str_eq(cur_page()->title, "DETAIL");
+    return !ui.home && !ui.menu && !ui.confirm && cur_page()->scope == SC_STEP &&
+           (str_eq(cur_page()->title, "DETAIL") || str_eq(cur_page()->title, "DETAIL 2"));
 }
+/* DETAIL 2: the same page for the cursor and the keys (detail_on); its knobs the cursor step's PRESET lock, ACC, SLD, LEN
+ * (ui_input.c sd2_turn), its panel their lanes (ui_graph.c graph_detail2) */
+static int detail2_on(void) { return detail_on() && str_eq(cur_page()->title, "DETAIL 2"); }
 /* GLO > SONG (1.2): the white keys A B C D (A3 B3 C4 D4, white places 2..5: seq.c song_key) set the selected cell's slot;
  * they do not sound there, the other keys play as anywhere (seq.c keyboard_block: song.grid 3) */
 static int song_keys_on(void) { return !ui.home && !ui.menu && !ui.confirm && !ui.layer && cur_page()->graph == GR_SONG; }
@@ -1099,7 +1108,7 @@ static void undo_swap(void)
 {
     track_t *t;
     uint32_t i;
-    char b[4] = {'T', 0, 0, 0};
+    char b[16] = {'T', 0, ' ', 0};
     if (!undo.trk) {
         ui_message("NOTHING TO UNDO");
         return;
@@ -1169,7 +1178,9 @@ static void undo_swap(void)
     undo.keep = 0;                                /* the next load copies the track as it is now */
     if (t == TSEL)
         sync_reload = 1;
-    b[1] = (char)('1' + trk_index(t));
+    b[1] = (char)('1' + trk_index(t));             /* (1.8: and what came back) */
+    str_cpy(b + 3, undo.what & UNDO_SOUND ? (undo.what & UNDO_PAT ? "SOUND+STEPS" : "SOUND") :
+            undo.what & UNDO_PAT ? "STEPS" : "AUTO", sizeof b - 3u);
     ui_say("UNDO/REDO ", b);
     ui.force = 1;
 }

@@ -101,23 +101,25 @@ static int page_cycle(void)
     pattern(4);
     ok = str_eq(cur_page()->title, "STEP");
     press(B_SEQ); frames(320);
-    ok &= str_eq(cur_page()->title, "DETAIL") && detail_on() && cur_page()->graph == GR_ROLL && ui.cursor == 4u &&
+    ok &= str_eq(cur_page()->title, "DETAIL") && detail_on() && !detail2_on() && cur_page()->graph == GR_ROLL && ui.cursor == 4u &&
           song.seq_mode;
+    press(B_SEQ); frames(320);
+    ok &= str_eq(cur_page()->title, "DETAIL 2") && detail_on() && detail2_on() && cur_page()->graph == GR_ROLL && ui.cursor == 4u;   /* (the PRESET lock's) */
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS && !detail_on();
     press(B_SEQ); frames(320);
     ok &= str_eq(cur_page()->title, "SEQUENCE") && !detail_on();                /* (1.6) */
     press(B_SEQ); frames(320);
     ok &= str_eq(cur_page()->title, "STEP") && !detail_on();
-    bad += check("SEQ: STEP -> DETAIL (the same cursor) -> AUTOMATION -> SEQUENCE (1.6) -> STEP", ok);
+    bad += check("SEQ: STEP -> DETAIL (the same cursor) -> DETAIL 2 -> AUTOMATION -> SEQUENCE (1.6) -> STEP", ok);
     go_detail();
     {
         char ti[20];
         page_title(ti);
-        ok = str_eq(ti, "DETAIL 2/4");
+        ok = str_eq(ti, "DETAIL 2/5");
     }
     ok &= help_page() && str_eq(help_page(), "[PRESETS]STEP[K1]CHANCE, 1:4, FILL");
-    bad += check("  its footer title DETAIL 2/4 (not the scale), its HELP hint", ok);
+    bad += check("  its footer title DETAIL 2/5 (not the scale), its HELP hint", ok);
     return bad;
 }
 
@@ -183,13 +185,13 @@ static int knobs(void)
     go_detail();
     ui.msg_t = 0;
     kt(EN_K3, 2);
-    ok = msg_is("QUANTIZE IS ON") && step_nudge(&trk[0].step[2]) == 2;
+    ok = msg_is("QUANTIZE ON: SEQ>AUTO") && step_nudge(&trk[0].step[2]) == 2;
     t = &trk[0];
     t->step[2].flags |= SF_ACCENT;
     ui.msg_t = 0;
     kt(EN_K4, -2);
     ok &= msg_is("ACC PLAYS 127") && t->step[2].vel == 94u;
-    bad += check("  NUDGE with QUANTIZE ON: QUANTIZE IS ON (kept); VEL on an ACC step: ACC PLAYS 127 (kept)", ok);
+    bad += check("  NUDGE with QUANTIZE ON: QUANTIZE ON: SEQ>AUTO (kept); VEL on an ACC step: ACC PLAYS 127 (kept)", ok);
 
     pattern(0);
     go_detail();
@@ -349,9 +351,67 @@ static int step_unchanged(void)
     return bad;
 }
 
+/* SEQ > DETAIL 2: the cursor step's PRESET lock, ACC, SLD, LEN */
+static void go_detail2(void)
+{
+    uint32_t i;
+    for (i = 0; i < NPAGES && !str_eq(PAGES[i].title, "DETAIL 2"); i++)
+        ;
+    ui.home = 0;
+    ui.page = (uint8_t)i;
+    page_entered();
+    frame();
+}
+static int detail2(void)
+{
+    int bad = 0, ok;
+    track_t *t = pattern(2);                          /* step 3: a note (64), step 4 after it empty */
+    int16_t v, v1;
+    uint32_t np = ENGINES[eng_idx(t->eng_req)]->npresets;
+    go_detail2();
+    ok = detail2_on() && ui.cursor == 2u && !motion_lock_get(t, 2, MOTION_PSET, &v);
+    kt(EN_K1, 1);
+    ok &= motion_lock_get(t, 2, MOTION_PSET, &v) && v == (int16_t)t->preset && ui.cursor == 2u;
+    bad += check("DETAIL 2: KNOB 1 up from none starts the step's PRESET lock at the track's preset", ok);
+    kt(EN_K1, 3);
+    ok = motion_lock_get(t, 2, MOTION_PSET, &v1) && v1 > v && (uint32_t)v1 < np;
+    kt(EN_K1, -100);
+    ok &= !motion_lock_get(t, 2, MOTION_PSET, &v1);
+    bad += check("  further up walks the list, down past the first is none again (no record)", ok);
+    kt(EN_K2, 1); kt(EN_K3, 1);
+    ok = (t->step[2].flags & SF_ACCENT) && (t->step[2].flags & SF_SLIDE) && t->step[2].note[0] == 64u;
+    kt(EN_K2, -1);
+    ok &= !(t->step[2].flags & SF_ACCENT) && (t->step[2].flags & SF_SLIDE);
+    bad += check("  KNOB 2 ACC and KNOB 3 SLD: up on, down off (the note kept)", ok);
+    kt(EN_K4, 1);
+    ok = note_len(t, 2) == 2u;
+    kt(EN_K4, -1);
+    ok &= note_len(t, 2) == 1u;
+    bad += check("  KNOB 4 LEN: a note's length in steps", ok);
+    ui.cursor = 1;                                    /* a rest: ACC SLD LEN take nothing, PRESET still takes a lock */
+    kt(EN_K2, 1); kt(EN_K3, 1); kt(EN_K4, 1);
+    ok = !(t->step[1].flags & (SF_ACCENT | SF_SLIDE)) && !t->step[1].n && t->step[1].time == ST_REST;
+    kt(EN_K1, 1);
+    ok &= motion_lock_get(t, 1, MOTION_PSET, &v);
+    bad += check("  a rest: ACC SLD LEN do nothing; its PRESET lock still can be set", ok);
+    kt(EN_K1, -100);
+    ui.cursor = 2;
+    kt(EN_K1, 1); kt(EN_K2, 1);
+    press(B_EDIT);
+    ok = !motion_lock_get(t, 2, MOTION_PSET, &v) && !(t->step[2].flags & (SF_ACCENT | SF_SLIDE));
+    bad += check("  EDIT: the step's PRESET lock gone and its ACC and SLD off", ok);
+    ok = (up_store(3, "SND") == 0 || up_used(3));
+    kt(EN_K1, 1);
+    kt(EN_K1, 1000);
+    ok &= motion_lock_get(t, 2, MOTION_PSET, &v) && v == -4;
+    bad += check("  KNOB 1 to the end of the list: the track's engine's user presets (slot 4: -4)", ok);
+    kt(EN_K1, -100);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = page_cycle() + knobs() + edit_undo() + chords_play() + drum() + step_unchanged();
+    int bad = page_cycle() + knobs() + edit_undo() + chords_play() + drum() + step_unchanged() + detail2();
     printf("%s\n", bad ? "DETAIL TEST FAILED" : "detail tests passed");
     return bad != 0;
 }

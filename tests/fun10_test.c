@@ -642,9 +642,8 @@ static int formats(void)
         memset(&r, 0, sizeof r);
         r.used = UP_USED; r.ver = UP_VER; r.engine = 0; r.np = P_COUNT;
         for (i = 0; i < P_COUNT; i++) { up_set_value(&r, i, t->p[i]); def[i] = TP[i].def; }
-        up_pat_from(&r, t->step);
         up_params(&r, v, def);
-        ok = v[P_LSYNC] == 4 && v[P_LPOL] == 1 && r.flags[0] == 0 && r.note[0] == 60 && r.flags[1] == 0 && r.note[1] == 62;
+        ok = v[P_LSYNC] == 4 && v[P_LPOL] == 1;   /* (a record holds no pattern since 1.7.1) */
         r.np = 99;                                    /* as 1.1 stored it: the engine's 8 after its 91 */
         for (i = 0; i < 8u; i++) up_set_value(&r, 91u + i, (int16_t)(10 + i));
         up_params(&r, v, def);
@@ -681,11 +680,11 @@ static int midi_track_fmt(void)
     memset(song.mch, 0, sizeof song.mch);
     song.g[G_ROUTE] = 0;
     project_capture(&a);
-    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 16u;
+    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 4u;
     for (i = end; i < PROJ_FM6_OFF; i++)
         ok &= st.raw[i] == 0u;
     ok &= proj_import(&b, &st, sizeof st) && !memcmp(&a, &b, sizeof a) && !b.mch[0] && !b.mch[3] && !b.g[G_ROUTE];
-    bad += check("MIDI IN TRACK (1.5.5): CH1-4 and the default channels pack as before (the 16 spare bytes all 0)", ok);
+    bad += check("MIDI IN TRACK (1.5.5): CH1-4 and the default channels pack as before (the 4 spare bytes all 0)", ok);
 
     song.g[G_ROUTE] = ROUTE_TRACK;
     mch_set(0, 9); mch_set(1, 1); mch_set(2, MCH_OMNI); mch_set(3, MCH_OFF);
