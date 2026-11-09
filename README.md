@@ -8,10 +8,14 @@ Connect the FM-1 to a computer by USB, open the
 [web installer](https://echoe.github.io/argo_fm1/) in Chrome or Edge and press Install; no extra hardware is needed.
 Installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** takes you back.
 
-- Install: [web installer](https://echoe.github.io/argo_fm1/)
-- Edit: [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
+NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Bootloader](https://github.com/jvitkauskas/m-bootloader) to ensure you can boot to reflash your device if you have any issues!
+
+- Install Argo: [web installer](https://echoe.github.io/argo_fm1/)
+- Edit (upload patches, edit fm6 patches): [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
 - Build: [BUILDING.md](BUILDING.md)
-- Related: [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained) ·
+- Related projects that this uses: 
+  [Felucca](https://github.com/hugelton/Felucca) (Where it all began, this firmware would not exist at all without it. I literally make releases in sync with the Felucca versions ... when I can/care.)
+  [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained)
   [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
   [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
   [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
@@ -21,6 +25,8 @@ Installing is at your own risk: M-VAVE's updater or the installer's **Return to 
 Argo is built fully with generative AI, piggybacking off of the work of Felucca. As is also true with Felucca, the
 design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
 icons or artwork. This README was initially written by AI as it edited the repo; it was then edited for clarity. (If you see something that reads in a confusing way, please feel free to open an issue.)
+
+I am trying to not take making this firmware extremely seriously, so fixes/etc. may be slow. But this is the firmware I use on my own FM-1 - I just wanted these features - so I will fix bugs eventually!
 
 ## Credits and licence
 
