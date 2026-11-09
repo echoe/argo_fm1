@@ -263,7 +263,7 @@ int main(void)
     {   /* MENU > CONTROL > SEQ SWITCH: NOW at once; END, while playing, at the end of the sequence playing */
         reset();
         ok = !(ui_prefs3 & (PREF_SEQ_END >> 24)) && menu_n(MI_SEQSW) == 2u && !strcmp(MI_NAME[MI_SEQSW], "SEQ SWITCH") &&
-             !strcmp(menu_vname(MI_SEQSW, 0), "NOW") && !strcmp(menu_vname(MI_SEQSW, 1), "END") && MI_TAB[MI_SEQSW] == MTAB_SYSTEM;
+             !strcmp(menu_vname(MI_SEQSW, 0), "NOW") && !strcmp(menu_vname(MI_SEQSW, 1), "END") && MI_TAB[MI_SEQSW] == MTAB_CONTROL2;
         song.playing = 1;
         trk[0].p[P_SLEN] = 16; trk[0].seq_idx = 3;
         (void)pb_request(0, 2);

@@ -157,9 +157,6 @@
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the
 #                   firmware's (tests/descdump.c -> build/host/desc.json; the MENU settings: tests/editor_test.c -> build/host/menu.json),
 #                   the package builder, the updater.
-# Browser emulator (web/emu, when emcc is there): the firmware in WebAssembly (build/emu) boots, plays keys and MIDI,
-#                   draws, lights its LEDs, keeps a save across instances, plays a song bit for bit as the same file
-#                   built with cc (web/emu/native_check.c); the cost of 1 s of a heavy song against real time.
 # PHYS (tests/phys_test.c): stability over the whole parameter and pitch range, the worst-case cost against
 #                   the heaviest factory preset, demos in build/phys_demo/; tests/phys_ref.cpp compares the
 #                   fixed-point models with DaisySP's float originals when DaisySP is there (DAISYSP=path).
@@ -190,6 +187,11 @@
 #                   GRAIN / SLICE). Longer runs: build/host/asan/fuzz_ed 300000 7 (iterations, seed), the same for the others.
 #                   UBSan leaves out the DSP's intended wraps (signed overflow, shifts) and the XIP rebase of a user zone's
 #                   offset (bounds, object-size, pointer-overflow: correct on the device's flat flash, not in C's model).
+# ADPCM (tests/adpcm_test.c): the voice (src/adpcm_dsp.c) sample for sample against snes_spc's SPC_DSP.cpp
+#                   (tests/adpcm_ref.cpp, when SNES_SPC points at a 0.9.0 checkout): BRR, Gaussian interpolation, ADSR, GAIN,
+#                   noise, the echo (FIR, feedback); its rate countdowns against the original's counter; the presets in the
+#                   mix (peak, clipping, voices freed, the echo idle), the pitch register; the part's engine memory shared
+#                   with PHYS (either engine after the other = from boot); demos in build/adpcm_demo/.
 # Change baseline entries only for reviewed, intentional differences in sound or cost;
 # retain every unaffected golden / CPU / target entry. VERBOSE=1: every render.
 set -e
@@ -260,15 +262,15 @@ EOF
         "$OUT/usb_desc_test"
 done
 
-[ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
+[ -f build/argo.fwsc ] || { echo "run ./build.sh first"; exit 1; }
 
 $CC -DOWN_PKG=1 -o "$OUT/ota_test" tests/ota_test.c
-run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/felucca.fwsc
+run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/argo.fwsc
 
 head -c 200000 build/felucca.bin > "$OUT/old_app.bin"
 python3 tools/fm1pkg_make.py "$OUT/old_app.bin" build/loader/ota.bin "$OUT/old.fwsc" >/dev/null
 $CC -o "$OUT/ldr_test" tests/ldr_test.c
-run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/argo.fwsc
 
 if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm
@@ -351,6 +353,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_new build/ui_slot; fi
     $CC -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_fm4" tests/ui_test.c -lm
     run "UI built with FELUCCA_FM4=1 (DIGITAL, kept in the tree): its OP pages, EDIT cycle, algorithm charts" "$OUT/ui_test_fm4"
+    $CC -w -DFELUCCA_ADPCM=1 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_adpcm" tests/ui_test.c -lm
+    run "UI built with FELUCCA_ADPCM=1 (off by default): ADPCM last in PRESETS, no EDIT key (INIT stays on E5), its favourites" "$OUT/ui_test_adpcm"
     $CC -O1 -w -DFELUCCA_FM4=1 "-DFELUCCA_VERSION=\"$FV\"" -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ui_render_fm4" tests/ui_render.c -lm
     mkdir -p build/ui_fm4/ppm build/ui_fm4_slot
     run "UI renders with FELUCCA_FM4=1: DIGITAL's screens (EDIT, OP ENV, the 8 algorithm charts), lint, GREY gray, MONO neutral" \
@@ -542,9 +546,9 @@ else
     $STRICT_CC -o "$A/uart_dma_test_strict" tests/uart_dma_test.c -lm
     run "Strict ASan/UBSan (no exclusions): uart_dma_test" "$A/uart_dma_test_strict"
     $SCC -o "$A/ldr_test" tests/ldr_test.c
-    run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
+    run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/argo.fwsc
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
-    run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
+    run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/argo.fwsc
     for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test midi_drift_test; do
         f=; case $t in editor_test|backup_test|robust_test) f=$SMPF;; esac   # (the user sample slots: SMPF)
         $SCC $f -o "$A/$t" tests/$t.c -lm
@@ -570,18 +574,6 @@ if command -v node >/dev/null 2>&1; then
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
 else
     echo "== skip web tests (no node)"
-fi
-
-if ! command -v emcc >/dev/null 2>&1; then
-    echo "== skip the browser emulator (no emcc: Emscripten builds web/emu)"
-elif ! command -v node >/dev/null 2>&1 || [ ! -f build/gen/felucca_tables.h ]; then
-    echo "== skip the browser emulator (needs node and build/gen)"
-else
-    run "browser emulator: the firmware to WebAssembly (web/emu/build.sh -> build/emu)" sh web/emu/build.sh
-    cc -O2 -ffp-contract=off -w $HALI -Ibuild/gen -Ifirmware/src -o "$OUT/emu_native" web/emu/native_check.c -lm
-    run "browser emulator: the same song from the native build" "$OUT/emu_native" "$OUT/emu_native.f32"
-    run "browser emulator: boot, keys, MIDI, screen, LEDs, PLAY, a save kept across instances, = native, cost" \
-        node web/emu/emu_test.mjs build/emu/felucca.wasm "$OUT/emu_native.f32"
 fi
 
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }

@@ -1,6 +1,6 @@
 # Argo
 
-## Overview
+## Project resources
 
 Multi-engine synthesizer firmware for the M-VAVE FM-1 that is a branch off of Felucca, removing the samples and adding in different engines -
 one SHDRUM, unique to this firmware, three engines from Mini-tone, and the drum engine from Jiant.
@@ -16,7 +16,7 @@ Installing is at your own risk: M-VAVE's updater or the installer's **Return to 
   [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
   [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
 
-## AI disclaimer
+## Development and support
 
 Argo is built fully with generative AI, piggybacking off of the work of Felucca. As is also true with Felucca, the
 design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
@@ -161,4 +161,3 @@ Note: The last 16 presets can't hold FM6 patches.
 -Manual editing of the slicer patterns instead of picking one of 16.
 -Removing phrases, if possible.
 -Figure out how to put on the screen that you delete a step by pressing the edit button, in the SEQ screen. It took me forever to find that in Felucca and it would be good.
--Make this change https://github.com/hugelton/Felucca/commit/743551712c36b3984392eea1dbe13a309907e17a

@@ -30,6 +30,11 @@ static const menu_credit_t MENU_CREDITS[] = {
     {"Tony Gies / MIT", MC_TEXT},
     {"https://github.com/tgies/klattsch", MC_URL},
     {"", MC_TEXT},
+#if FELUCCA_ADPCM
+    {"ADPCM DSP", MC_TITLE},
+    {"Shay Green, ported by ugotworms / LGPL-2.1+", MC_TEXT},
+    {"", MC_TEXT},
+#endif
     {"DAISYSP", MC_TITLE},
     {"Electrosmith, Emilie Gillet", MC_TEXT},
     {"MIT", MC_TEXT},
@@ -166,16 +171,16 @@ static void menu_head(void)
  *                   CLOSE is in the header: the four would not fit in S (cv_key_row drops words, from the last)
  * Drawn in two bands (the canvas holds 124 rows) split in a gap between two rows; while the tabs slide only their
  * strip (24..58) is drawn again */
-static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG};
+static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_PATTERN, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG};
 #define MT_Y 29                                        /* the tab bar */
 #define MT_H 24
-#define MT_IW 26                                       /* a cushion with its icon alone (the icon centred in it; 1.2, five
-                                                        * tabs: 26, up to 1.1.5 32) */
+#define MT_IW 18                                       /* a cushion with its icon alone (the icon centred in it; 1.2, five
+                                                        * tabs: 26, up to 1.1.5 32; 1.6.1_sequences, six tabs (CONTROL 2): 18) */
 #define MT_NX 24                                       /* the name's pen in the one shown; 10 px after it */
 #define MT_X0 6
 #define MT_X1 234
-#define MT_GAP 5                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1; 1.2, five
-                                                        * tabs: 5, up to 1.1.5 8) */
+#define MT_GAP 4                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1; 1.2, five
+                                                        * tabs: 5, up to 1.1.5 8; six: 4) */
 #define MT_ONE 64                                      /* mt.pos per tab */
 #define MP_Y 59                                        /* the rows' panel */
 #define MP_PAD 3
@@ -295,7 +300,7 @@ static void menu_row(uint32_t k, uint32_t row)
         cv_text_r(MR_VR, vy, &AF_M, b, val, bg);
         return;
     }
-    if (row >= MI_VALUES) {                            /* CALIBRATION, ABOUT: OCT+ opens them */
+    if (row >= MI_VALUES) {                            /* CLEAR ALL, CALIBRATION, ABOUT: OCT+ opens them */
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row chevron centred up/down");
         cv_icon_in(MR_VR - 12, y, 0, h, 12, ICON_X_RIGHT, sel ? T_INK : T_MID, bg);
         return;
@@ -525,9 +530,16 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         if (s)
             menu_put(ui.menu_sel, menu_step(ui.menu_sel, s));
     } else if (up) {
-        if (ui.menu_sel == MI_LCLEAR) {                 /* LEARN CLEAR (1.5): every learned CC; no dialog (the menu has
-                                                         * none: every other row's change is undone the same way) */
-            ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");
+        if (ui.menu_sel == MI_LCLEAR) {                 /* LEARN CLEAR (1.5): every learned CC; 1.8: the dialog first */
+            if (ml_count()) {
+                menu_close();
+                confirm_open(CF_LEARN_CLEAR, 0);
+            } else {
+                ui_message("NOTHING LEARNED");
+            }
+        } else if (ui.menu_sel == MI_CLRALL) {          /* CLEAR ALL (1.8, #266): the dialog, out of the menu */
+            menu_close();
+            confirm_open(CF_CLEAR_ALL, 0);
         } else if (ui.menu_sel == MI_PANEL) {
             panel_setup();
             scrn.idle = fm1_ms;                         /* (SCREEN OFF: its own loop had the input) */

@@ -48,7 +48,7 @@
 #define FM1_CRASH_CTX_N 1u         /* chip/fm1_irq.h: the registers of the last crash only (80 B of .noinit; four would
                                     * not fit beside the project slots) */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.7.0"           /* shown in the menu, the console and the editor; build.py --release X.Y (Argo) */
+#define FELUCCA_VERSION "v1.8.1" /* shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
@@ -68,6 +68,7 @@ static __attribute__((noinline)) int c1_wait(void) { return fm1_cpu1_wait(); }  
                                                  * path (chip/fm1_cpu1.h fm1_cpu1_retire) stays out of the audio ISR */
 #define C1_WAIT() c1_wait()
 #endif
+#include "keytouch.h"        /* 1.8 AFTERTOUCH: the scan's hooks (MPL-2.0, from fm1-base), before fm1_input.h */
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -126,5 +127,6 @@ static __attribute__((noinline)) int c1_wait(void) { return fm1_cpu1_wait(); }  
 #if FELUCCA_CDC
 #include "console.c"
 #endif
+#include "keytouch.c"           /* 1.8 AFTERTOUCH: the keys' pressure (MPL-2.0, from fm1-base) */
 #include "master.c"              /* the MASTER pot (#137: read before the audio starts) */
 #include "main.c"
