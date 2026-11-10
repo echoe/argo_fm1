@@ -62,10 +62,10 @@ Synths from other firmwares are:
 
 The unique synth in this firmware is:
 - SH-TONE: A drum engine unique to this firmware, modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
-  - Two oscillators that can be SIN, TRI, SAW, SQR, NOISE, and PULSE.
-  - You can either MIX, FM, RING, or SYNC the two oscillators.
-  - Sweep pitch and time, edit Osc B pitch, and Drive.
-  - Individual AD envelope, level, and Pulse Width (if applicable) per operator.
+  - Two oscillators that can be SIN, TRI, SAW, SQR, and NOISE.
+  - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH.
+  - Sweep pitch and time, and change the coarse pitch of each oscillator (TUN A, TUN B).
+  - Individual AD envelope and level per operator.
   - Drive/Click/Fold/Crush effects.
   - An ending LP/BP/HP filter.
 
@@ -75,11 +75,16 @@ Each track plays one of eight sequences. A sequence has its own steps, its own l
 locks (up to 64 records while it is not the one playing). DIV, SWING, GATE, QUANTIZE and the sound are set per track. 
 To see these in process, go to **SEQ > SEQUENCE** (the ending SEQ page, page 5). The knobs pick the sequence, one knob per track, top-down under the knobs themselves.
 
-You can switch patterns either immediately, or at the end of a page. This setting is at **MENU > SYSTEM > SEQ SWITCH**.
+You can switch patterns either immediately, or at the end of a page. This setting is at **MENU > CONTROL 2 > SEQ SWITCH**.
 - **CHAIN** (SEQ > SEQUENCE, PRESETS): turn PRESETS right to add the selected pattern to the chain. The sequences you chain play one after the other in order. A sequence you did not chain loops by itself.
   In the track it shows how long the chain is under 'T2', and each sequence in a chain has a little dot on its left. The bottom of the screen also shows "CHAIN ON" or "CHAIN OFF" for the selected sequence.
 - **SONG**: In the song mode ( click GLO ), the PRESETS knob changes the sequence the selected cell plays. By default it'll play the sequence that the project was saved on, but you can choose any of the 8 sequences of a project's track. It will display under the PAT option [knob 3]". The footer says what PRESETS does to hopefully remind you, and a song holds up to six such chosen sequences ("TOO MANY SEQ" is displayed otherwise). This is because of space limits. You can always play it in by hand.
 - SAVE keeps all of a project's sequences (the record holds the one playing, so an older firmware still opens it). They live in the flash the user sample slots had.
+
+## SLICER 2
+
+The SLICER has a USER pattern (PAT 17). On the SLICER 2 page the white keys toggle its 16 steps (the first key copies the preset you had
+selected). There is one USER pattern per project, saved with it.
 
 ## A generative mode within ARP
 
@@ -158,7 +163,5 @@ Note: The last 16 presets can't hold FM6 patches.
 
 ## Todo
 
-None of these are necessary:
--Manual editing of the slicer patterns instead of picking one of 16.
 -Removing phrases, if possible.
--Figure out how to put on the screen that you delete a step by pressing the edit button, in the SEQ screen. It took me forever to find this in Felucca and it would be good ... I am going to see if it's possible to do without being annoying.
+-Figure out how to put on the screen that you delete a step by pressing the edit button, in the SEQ screen. It took me forever to find this in Felucca and it would be good.

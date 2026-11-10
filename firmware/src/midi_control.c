@@ -224,7 +224,7 @@ static const uint8_t MIDI_CC_ENG[NENGINES] = {
     FELUCCA_GRAIN ? 0x80 : 0, 0x30, 0x30, 0x34, 0x30, /* GRAIN TONE, PHYS BRIT, DRUM TONE, NOISE FREQ RES, FM6 MLVL */
     FELUCCA_SLICE ? 0x80 : 0,                         /* SLICE TONE */
 #if FELUCCA_SHDRUM
-    0x48,                                             /* SHDRUM DPTH DRV */
+    0x40,                                             /* SHDRUM DPTH (Argo: DRV, the resonance's, is gone) */
 #endif
 #if FELUCCA_SWARM
     0x80,                                             /* SWARM CUT (no resonance control) */

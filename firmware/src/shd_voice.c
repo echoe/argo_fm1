@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The SHDRUM voice: the two-layer drum sound (see eng_shdrum.c for what it is), as a function of a parameter set (shd_vp_t)
- * and a voice state (phases, envelopes, filter: 3 + 8 words; ph[2] is the crusher's counter and, with PULSE or SYNC, a DC blocker), so two engines share it: SHDRUM (a track's parameters, the
+ * and a voice state (phases, envelopes, filter: 3 + 8 words; ph[2] is the crusher's counter and, with SYNC, a DC blocker), so two engines share it: SHDRUM (a track's parameters, the
  * voice's own state) and DRUM's KIT SH (eng_drum.c: a recipe of the library below per lane, the lane's state).
  * Included by both (guarded). */
 #ifndef SHD_VOICE_C
 #define SHD_VOICE_C
 
-enum { SHW_SIN, SHW_TRI, SHW_SAW, SHW_SQR, SHW_NOIS, SHW_PULSE, SHW_COUNT };   /* (new waves go last: stored values keep their meaning) */
+enum { SHW_SIN, SHW_TRI, SHW_SAW, SHW_SQR, SHW_NOIS, SHW_COUNT };   /* (Argo: PULSE, the 6th, is gone with its widths; a stored 5 reads NOIS) */
 enum { SHM_MIX, SHM_FM, SHM_RING, SHM_SYNC, SHM_COUNT };
 enum { SHF_OFF, SHF_LP, SHF_BP, SHF_HP, SHF_COUNT };
 
@@ -20,7 +20,7 @@ typedef struct {
     uint8_t clik, fold, crsh;           /* CLIK, FOLD, CRSH */
     uint8_t ftyp, cut, res;             /* FLT, CUT, RES */
     int8_t fenv;                        /* FENV */
-    uint8_t apw, bpw;                   /* A PW, B PW: the width of a PULSE wave (0 = a square, 127 = the narrowest) */
+    int8_t tuna;                        /* TUN A (semitones; Argo): layer A's pitch from the key, as TUN B is layer B's (after FENV: the recipes below leave it 0) */
 } shd_vp_t;
 
 #define SHD_AT 0x40000000          /* in s[0], s[1]: the attack is running (the value is in the low 25 bits) */
@@ -45,20 +45,13 @@ static int32_t shd_env(int32_t *st, uint32_t atk, uint32_t dec)   /* one control
     return e;
 }
 
-/* the phase at which a PULSE wave falls: 50 % of the cycle (PW 0, a square) down to about 2.4 % (PW 127) */
-static inline uint32_t shd_pw(uint32_t pw)
-{
-    return 0x80000000u - ((0x7AE147AEu >> 7) * (pw > 127u ? 127u : pw));
-}
-
-static inline int32_t shd_wave(uint32_t w, uint32_t ph, uint32_t inc, uint32_t pw, int32_t *nst)
+static inline int32_t shd_wave(uint32_t w, uint32_t ph, uint32_t inc, int32_t *nst)
 {
     switch (w) {
     case SHW_SIN: return sine_i(ph);
     case SHW_TRI: return osc_tri(ph);
     case SHW_SAW: return osc_saw(ph, inc);
     case SHW_SQR: return osc_pulse(ph, inc, 0x80000000u);
-    case SHW_PULSE: return osc_pulse(ph, inc, pw);
     default: return (int32_t)(noise32(nst) >> 16) - 32768;
     }
 }
@@ -92,16 +85,14 @@ static void shd_run(const shd_vp_t *q, uint32_t *ph, int32_t *st, int32_t pitch1
     int32_t depth = q->depth, drv = q->drv, clk = q->clik, fold = q->fold, crsh = q->crsh;
     int32_t gA = q->alvl * 258, gB = q->blvl * 258;
     int32_t eA0 = st[0] & SHD_EMASK, eB0 = st[1] & SHD_EMASK, pe0 = st[2], eA1, eB1, pe1;
-    int32_t sw = q->swep * 16, tb = q->tunb * 16;
-    int32_t pA0, pA1, nst = st[3], ck = st[6], held = st[7], ic1 = st[4], ic2 = st[5];
+    int32_t sw = q->swep * 16, ta = q->tuna * 16, tb = q->tunb * 16;   /* (1/16 semitone) */
+    int32_t pS0, pS1, nst = st[3], ck = st[6], held = st[7], ic1 = st[4], ic2 = st[5];
     int32_t md = depth * 258, gr, fg = 4096, g = 0, mk = 0, fk = 0, sh = 0;
     uint32_t phA = ph[0], phB = ph[1], cnt = ph[2] & 7u, iA, iB, hold = 1, dd = (uint32_t)depth * 2628u;
-    /* the DC blocker: a synced wave is cut short each cycle, and a lopsided PULSE through FOLD or DRV turns its asymmetry into
-     * DC. A one-pole high-pass a twentieth of the key's frequency (the pitch sweep does not move it): the DC goes in a few
-     * cycles, the wave's own shape barely tilts; plain PULSE, and every other wave, are left alone */
-    uint32_t dcb = xm == SHM_SYNC || ((wa == SHW_PULSE || wb == SHW_PULSE) && (q->fold || q->drv)), dk = 0;
+    /* the DC blocker: a synced wave is cut short each cycle. A one-pole high-pass a twentieth of the key's frequency (the
+     * pitch sweep does not move it): the DC goes in a few cycles, the wave's own shape barely tilts; every other XMOD is left alone */
+    uint32_t dcb = xm == SHM_SYNC, dk = 0;
     int32_t dcs = (int32_t)ph[2] >> 3;                    /* SYNC's DC blocker (x16): ph[2] holds it above the crusher's 3-bit counter */
-    uint32_t pwA = shd_pw(q->apw), pwB = shd_pw(q->bpw);
     int32_t sA, sB, i;
     tsvf_t flt;
     if (n > CTL)
@@ -110,13 +101,14 @@ static void shd_run(const shd_vp_t *q, uint32_t *ph, int32_t *st, int32_t pitch1
     eB1 = shd_env(&st[1], q->batk, q->bdec);
     pe1 = pe0 - mulq16(pe0, ENV_EXP[q->swpt & 127u]);
     st[2] = pe1;
-    /* pitch: the key plus the sweep; the phase increments run linearly across the block so a fast sweep does not step */
-    pA0 = clamp(pitch16 + ((sw * (pe0 >> 9)) >> 15), 0, 2047);
-    pA1 = clamp(pitch16 + ((sw * (pe1 >> 9)) >> 15), 0, 2047);
-    iA = pitch_inc((uint32_t)pA0);
-    iB = pitch_inc((uint32_t)clamp(pA0 + tb, 0, 2047));
-    sA = ((int32_t)(pitch_inc((uint32_t)pA1) - iA)) >> 5;
-    sB = ((int32_t)(pitch_inc((uint32_t)clamp(pA1 + tb, 0, 2047)) - iB)) >> 5;
+    /* pitch: the key plus the sweep, and each layer its own tuning (TUN A, TUN B: both from the key, the sweep moves both); the
+     * phase increments run linearly across the block so a fast sweep does not step */
+    pS0 = pitch16 + ((sw * (pe0 >> 9)) >> 15);
+    pS1 = pitch16 + ((sw * (pe1 >> 9)) >> 15);
+    iA = pitch_inc((uint32_t)clamp(pS0 + ta, 0, 2047));
+    iB = pitch_inc((uint32_t)clamp(pS0 + tb, 0, 2047));
+    sA = ((int32_t)(pitch_inc((uint32_t)clamp(pS1 + ta, 0, 2047)) - iA)) >> 5;
+    sB = ((int32_t)(pitch_inc((uint32_t)clamp(pS1 + tb, 0, 2047)) - iB)) >> 5;
     gr = (gA * gB) >> 14;                                 /* the product's gain: 1.0 with both layers at 100 % */
     gr = gr > 32767 ? 32767 : gr;
     if (fold)
@@ -138,7 +130,7 @@ static void shd_run(const shd_vp_t *q, uint32_t *ph, int32_t *st, int32_t pitch1
     }
     for (i = 0; i < (int32_t)n; i++) {
         int32_t eA = (eA0 + (((eA1 - eA0) * i) >> 5)) >> 9, eB = (eB0 + (((eB1 - eB0) * i) >> 5)) >> 9;   /* Q15 */
-        int32_t bb = (shd_wave(wb, phB, iB, pwB, &nst) * eB) >> 15, aa, s;
+        int32_t bb = (shd_wave(wb, phB, iB, &nst) * eB) >> 15, aa, s;
         uint32_t pa = phA, ia = iA, pb;
         if (xm == SHM_FM)
             pa += (uint32_t)bb * dd;                      /* B's enveloped wave into A's phase */
@@ -146,7 +138,7 @@ static void shd_run(const shd_vp_t *q, uint32_t *ph, int32_t *st, int32_t pitch1
             int32_t rq = 8 + (int32_t)(((uint32_t)depth * 56u * (uint32_t)eB) >> 22);   /* x1..x8 in Q3 */
             ia = ((iA > 0x1FFFFFFFu ? 0x1FFFFFFFu : iA) >> 3) * (uint32_t)rq;
         }
-        aa = (shd_wave(wa, pa, ia, pwA, &nst) * eA) >> 15;
+        aa = (shd_wave(wa, pa, ia, &nst) * eA) >> 15;
         s = ((aa * gA) >> 15) + ((bb * gB) >> 15);
         if (xm == SHM_RING)                               /* DPTH: the two layers added -> their product */
             s = (((s >> 1) * (32767 - md)) >> 14) + ((((((aa * bb) >> 15) * gr) >> 15) * md) >> 15);

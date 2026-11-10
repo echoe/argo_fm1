@@ -132,7 +132,7 @@ int main(int argc, char **argv)
         { /* each parameter alone changes the hit */
             static const struct { int id; int v; const char *n; } T[] = {
                 {P_E0, SHW_SQR, "WAV A"}, {P_E1, SHW_SAW, "WAV B"}, {P_E2, SHM_RING, "XMOD ring"}, {P_E3, 90, "DPTH"},
-                {P_E4, 7, "TUN B"}, {P_E5, 0, "SWEP"}, {P_E6, 100, "SWP T"}, {P_E7, 100, "DRV"},
+                {P_E4, 7, "TUN A"}, {P_E5, 7, "TUN B"}, {P_E6, 0, "SWEP"}, {P_E7, 100, "SWP T"}, {SHP_DRV, 100, "DRV"},
                 {SHP_AATK, 60, "A ATK"}, {SHP_ADEC, 100, "A DEC"}, {SHP_BATK, 60, "B ATK"}, {SHP_BDEC, 100, "B DEC"},
                 {SHP_CLIK, 100, "CLIK"}, {SHP_FOLD, 100, "FOLD"}, {SHP_CRSH, 100, "CRSH"}, {SHP_FTYP, SHF_LP, "FLT"},
             };
@@ -153,27 +153,28 @@ int main(int argc, char **argv)
         /* FM with LVL B 0 differs from MIX with LVL B 0 */
         fresh(0); trk[0].p[SHP_BLVL] = 0; trk[0].p[P_E2] = SHM_MIX; r0 = hit(36, 200, 0);
         trk[0].p[P_E2] = SHM_FM; trk[0].p[P_E3] = 60; r1 = hit(36, 200, 0); chk("FM (B silent) is not MIX", r0.hash != r1.hash && r1.peak > 100);
-        /* PULSE: PW 0 is the square bit for bit; the width changes the sound; PW does nothing on the other waves (CLIK 0: no noise) */
-#define PTRK(wa, wb, lb, pa, pb) do { fresh(0); trk[0].p[SHP_CLIK] = 0; trk[0].p[P_E7] = 0; trk[0].p[SHP_BLVL] = (lb); trk[0].p[P_E0] = (wa); trk[0].p[P_E1] = (wb); \
-            trk[0].p[SHP_APW] = (pa); trk[0].p[SHP_BPW] = (pb); } while (0)
-        PTRK(SHW_SQR, SHW_SIN, 0, 0, 0); r0 = hit(48, 200, 0);
-        PTRK(SHW_PULSE, SHW_SIN, 0, 0, 0); r1 = hit(48, 200, 0);
-        chk("PULSE at PW 0 is SQR", r0.hash == r1.hash);
-        PTRK(SHW_PULSE, SHW_SIN, 0, 64, 0); r0 = hit(48, 200, 0);
-        PTRK(SHW_PULSE, SHW_SIN, 0, 127, 0); r1 = hit(48, 200, 0);
-        chk("PW changes a PULSE", r0.hash != r1.hash && r0.peak > 100 && r1.peak > 100);
-        PTRK(SHW_SAW, SHW_SIN, 0, 0, 0); r0 = hit(48, 200, 0);
-        PTRK(SHW_SAW, SHW_SIN, 0, 127, 127); r1 = hit(48, 200, 0);
-        chk("PW is ignored by SAW", r0.hash == r1.hash);
-        PTRK(SHW_SIN, SHW_PULSE, 100, 0, 20); r0 = hit(48, 200, 0);
-        PTRK(SHW_SIN, SHW_PULSE, 100, 0, 100); r1 = hit(48, 200, 0);
-        chk("B PW changes a PULSE on layer B", r0.hash != r1.hash);
+        /* (Argo) no PULSE wave and no pulse widths: the waves are SIN TRI SAW SQR NOIS; the loops below walk SHW_COUNT */
+        chk("the waves: SIN TRI SAW SQR NOIS, no PULSE", SHW_COUNT == 5 && ENG_SHDRUM.edit[0].max == 4 && strcmp(ENG_SHDRUM.edit[0].names[4], "NOIS") == 0);
+#define PTRK(wa, wb, lb) do { fresh(0); trk[0].p[SHP_CLIK] = 0; trk[0].p[SHP_DRV] = 0; trk[0].p[SHP_BLVL] = (lb); trk[0].p[P_E0] = (wa); trk[0].p[P_E1] = (wb); } while (0)
+        /* TUN A is layer A's pitch from the key, as TUN B is B's: +12 doubles a lone sine A's pitch, and does nothing with A silent */
+        {
+            stat_t z0, z1;
+            PTRK(SHW_SIN, SHW_SIN, 0); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E6] = 0; trk[0].p[SHP_ADEC] = 127; z0 = hit(48, 200, 0);
+            trk[0].p[P_E4] = 12; z1 = hit(48, 200, 0);
+            chk("TUN A +12 doubles layer A's pitch", z1.zc > 1.8 * z0.zc && z1.zc < 2.2 * z0.zc);
+            PTRK(SHW_SIN, SHW_SIN, 100); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E6] = 0; trk[0].p[SHP_ALVL] = 0; r0 = hit(48, 200, 0);
+            trk[0].p[P_E4] = 12; r1 = hit(48, 200, 0);
+            chk("TUN A changes nothing with layer A silent", r0.hash == r1.hash);
+            PTRK(SHW_SIN, SHW_SIN, 100); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E6] = 0; trk[0].p[SHP_ALVL] = 0; trk[0].p[SHP_BDEC] = 127; z0 = hit(48, 200, 0);
+            trk[0].p[P_E5] = 12; z1 = hit(48, 200, 0);
+            chk("TUN B +12 doubles layer B's pitch (from the key, whatever TUN A)", z1.zc > 1.8 * z0.zc && z1.zc < 2.2 * z0.zc);
+        }
         /* SYNC: B (key + TUN B) is the master: the output repeats at its period, and not at a half of it (the unsynced A's) */
         {
             int16_t *b = malloc(2 * 40000);
             double e = 0, rm = 0, rh = 0, dc = 0; uint32_t i;
-            PTRK(SHW_SAW, SHW_SIN, 0, 0, 0);
-            trk[0].p[P_E2] = SHM_SYNC; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = -12; trk[0].p[P_E5] = 0;
+            PTRK(SHW_SAW, SHW_SIN, 0);
+            trk[0].p[P_E2] = SHM_SYNC; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = 0; trk[0].p[P_E5] = -12; trk[0].p[P_E6] = 0;
             trk[0].p[SHP_ADEC] = 127; trk[0].p[SHP_BDEC] = 127;
             r0 = hit(48, 1000, b);                      /* key 48 (130.8 Hz); the master (TUN B -12) is 65.4 Hz: 674.3 samples */
             chk("SYNC sounds", r0.peak > 1000);
@@ -184,7 +185,7 @@ int main(int argc, char **argv)
             printf("shdrum_test: SYNC: autocorrelation at the master period (674) %.2f, at half of it %.2f, mean %.0f\n", rm / e, rh / e, dc / 8000.0);
             chk("SYNC repeats at B's period", rm / e > 0.7 && rm > rh + 0.2 * e);
             chk("SYNC has no DC", fabs(dc / 8000.0) < 0.02 * r0.peak);
-            PTRK(SHW_SAW, SHW_SIN, 0, 0, 0); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = -12; trk[0].p[P_E5] = 0;
+            PTRK(SHW_SAW, SHW_SIN, 0); trk[0].p[P_E2] = SHM_MIX; trk[0].p[P_E3] = 127; trk[0].p[P_E4] = 0; trk[0].p[P_E5] = -12; trk[0].p[P_E6] = 0;
             trk[0].p[SHP_ADEC] = 127; trk[0].p[SHP_BDEC] = 127;
             chk("SYNC is not MIX", r0.hash != hit(48, 1000, 0).hash);
             free(b);
@@ -193,7 +194,7 @@ int main(int argc, char **argv)
         {
             int16_t *b = malloc(2 * 22050);
             double f0, f1; uint32_t i, z0 = 0, z1 = 0;
-            fresh(0); trk[0].p[SHP_BLVL] = 0; trk[0].p[SHP_ADEC] = 100; trk[0].p[P_E5] = 36; trk[0].p[P_E6] = 40;
+            fresh(0); trk[0].p[SHP_BLVL] = 0; trk[0].p[SHP_ADEC] = 100; trk[0].p[P_E6] = 36; trk[0].p[P_E7] = 40;
             (void)hit(36, 600, b);
             for (i = 1; i < 2000; i++) z0 += (b[i] < 0) != (b[i - 1] < 0);
             for (i = 8000; i < 10000; i++) z1 += (b[i] < 0) != (b[i - 1] < 0);
@@ -226,10 +227,10 @@ int main(int argc, char **argv)
                     trk[0].p[P_E2] = (int16_t)xm; trk[0].p[SHP_FTYP] = (int16_t)ft;
                     for (b = 0; b < 8; b++) {
                         int16_t lo = (c >> b) & 1 ? 0 : 127;
-                        static const int ids[8] = {P_E3, P_E7, SHP_CLIK, SHP_FOLD, SHP_CRSH, SHP_CUT, SHP_RES, SHP_BLVL};
+                        static const int ids[8] = {P_E3, SHP_DRV, SHP_CLIK, SHP_FOLD, SHP_CRSH, SHP_CUT, SHP_RES, SHP_BLVL};
                         trk[0].p[ids[b]] = lo;
                     }
-                    trk[0].p[P_E4] = (c & 1) ? -24 : 24; trk[0].p[P_E5] = (c & 2) ? -24 : 48; trk[0].p[SHP_FENV] = (c & 4) ? -64 : 63;
+                    trk[0].p[P_E4] = (c & 1) ? -24 : 24; trk[0].p[P_E5] = (c & 2) ? 24 : -24; trk[0].p[P_E6] = (c & 2) ? -24 : 48; trk[0].p[SHP_FENV] = (c & 4) ? -64 : 63;
                     trk[0].p[SHP_ALVL] = 127; trk[0].p[SHP_ADEC] = (c & 8) ? 0 : 127 - (c & 7);
                     s = hit((c & 16) ? 0 : (c & 32) ? 127 : 60, 900, 0);
                     if (s.peak > 70000 || s.dc > 4000) { if (!bad2) printf("  corner xm %u ft %u c %u: peak %.0f dc %.1f\n", xm, ft, c, s.peak, s.dc); bad2++; }
@@ -269,7 +270,8 @@ int main(int argc, char **argv)
             for (i = 0; i < 8; i++) p[P_E0 + i] = ENG_SHDRUM.presets[l].e[i];
             for (i = 0; i < SHP_N; i++) p[SHP_AATK + i] = SHD_PRESET_X[l][i];
             shd_vp_load(&q, p);
-            if (memcmp(&q, &SHD_REC[l].q, sizeof q)) { uint32_t j; printf("  recipe %u differs:", l); for (j = 0; j < sizeof q; j++) if (((uint8_t *)&q)[j] != ((const uint8_t *)&SHD_REC[l].q)[j]) printf(" [%u]%d/%d", j, ((uint8_t *)&q)[j], ((const uint8_t *)&SHD_REC[l].q)[j]); printf("\n"); fails++; }
+            { shd_vp_t rc = SHD_REC[l].q;
+            if (memcmp(&q, &rc, sizeof q)) { uint32_t j; printf("  recipe %u differs:", l); for (j = 0; j < sizeof q; j++) if (((uint8_t *)&q)[j] != ((const uint8_t *)&SHD_REC[l].q)[j]) printf(" [%u]%d/%d", j, ((uint8_t *)&q)[j], ((const uint8_t *)&SHD_REC[l].q)[j]); printf("\n"); fails++; } }
         }
         for (kp = 4; kp < 7; kp++) {
             double tot = 0;
