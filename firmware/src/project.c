@@ -123,6 +123,7 @@ typedef struct {
     uint8_t phys;                              /* PROJ_PHYS: PHYS MODEL values as today; 1: MODEL 4 was DRUM;
                                                 * 0 (a reserved byte before 1.0): MODEL 2 was DUST */
     uint8_t rsv;
+    uint16_t slusr;                            /* Argo: the SLICER's USER pattern (slicer.c sl_user), bytes 65 and 67 of the store */
     proj_trk_t t[NTRK];
     chain_config_t chain;
     motion_store_t motion;
@@ -633,7 +634,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
             if (q->fm6[t][i] > 127u) return 0;
     if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
-    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = P_COUNT;
+    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[65] = (uint8_t)q->slusr; b[66] = P_COUNT; b[67] = (uint8_t)(q->slusr >> 8);   /* (65 and 67 were never written: 0) */
     for (t = 0; t < NTRK; t++) {
         for (i = 0; i < P_COUNT; i++) {
             if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
@@ -760,8 +761,10 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     else if (!proj_motion_v9(&q->motion, b + pos))
         return 0;
     if (!proj_motion_ids(&q->motion, np) || !chain_valid(&q->chain) || !motion_valid(&q->motion)) return 0;
-    if (v10)
+    if (v10) {
+        q->slusr = (uint16_t)(b[65] | (uint32_t)b[67] << 8);   /* (Argo: 0 in every project before) */
         proj_midi_unpack(q, b);                         /* (1.5.5: 0 in every FUN10 before, FUN9..FUN7 have none) */
+    }
     for (t = 0; t < NTRK; t++) {
         if (v7)
             memcpy(q->fm6[t], FM6_INIT, FM6_PACKED);
@@ -877,6 +880,7 @@ static void project_capture(project_t *p)
     p->sel = song.sel;
     p->parts = NPART;
     p->phys = PROJ_PHYS;
+    p->slusr = sl_user;
     p->chain = chain_config;
     for (i = 0; i < NTRK; i++) {
         for (uint32_t j = 0; j < P_COUNT; j++) p->t[i].p[j] = motion_base_value(&trk[i], j);
@@ -1097,6 +1101,7 @@ static int project_restore_runtime(const project_t *input)
     for (i = 0; i < G_COUNT; i++)
         if (i != G_SLOT && i != G_LOAD && i != G_SAVE)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
+    sl_user = p->slusr ? p->slusr : 0x5555u;            /* the SLICER's USER pattern (Argo; 0 = none saved: the default) */
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
     midi_route = MIDI_ROUTE_AGAIN;                      /* (events_block: what the channels no longer hear let go) */
@@ -1443,6 +1448,7 @@ static uint32_t autosave_sig(void)
     for (i = 0; i < G_COUNT; i++)
         if (i != G_SLOT && i != G_NAME && i != G_LOAD && i != G_SAVE)
             h = as_mix(h, &song.g[i], sizeof song.g[i]);
+    h = as_mix(h, &sl_user, sizeof sl_user);            /* (Argo: the SLICER's USER pattern, the project's) */
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
 #if FELUCCA_PATBANK

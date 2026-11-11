@@ -4,7 +4,7 @@
  * mono signal after DIST and the INSERT, and before LEVEL / PAN / the sends (fx.c mix_part), so the sends follow
  * the chopped sound.
  *   P_SLCR    OFF / GATE / STUT   (a third mode, GRAIN, is the INSERT's now: fx.c IT_GRAIN)
- *   P_SLPAT   one of SL_NPAT patterns of 16 steps ('x' live / open, '.' gated / repeated)
+ *   P_SLPAT   one of SL_NPAT patterns of 16 steps (SL_NPAT + 1 = USER: sl_user, the project's own, edited on SLICER 2) ('x' live / open, '.' gated / repeated)
  *   P_SLRATE  the step: 1/8, 1/16, 1/32, 8T, 16T, 32T
  *   P_SLDEPTH GATE: how far a '.' step closes (100 % = silent); STUT: the level of the repeat
  * GATE: the gain moves at most 1 / SL_RAMP per sample (2.9 ms from open to closed): a closing
@@ -74,7 +74,14 @@ static void slicer_start(void)   /* seq_start: the next block starts step 0 of e
     }
 }
 
-static uint32_t sl_pattern(const track_t *t) { return SL_PAT[(uint32_t)(t->p[P_SLPAT] - 1) % SL_NPAT]; }
+/* Argo: the USER pattern (PAT 17), bit k = step k: one for the project, saved with it (project.c, header bytes 65 and 67) */
+static uint16_t sl_user = 0x5555u;
+static uint32_t sl_pattern(const track_t *t)
+{
+    if (t->p[P_SLPAT] == SL_NPAT + 1)                    /* USER (Argo): the track's own 16 steps, bit k = step k */
+        return sl_user;
+    return SL_PAT[(uint32_t)(t->p[P_SLPAT] - 1) % SL_NPAT];
+}
 /* the mode: a value past STUT (a retired GRAIN, params.c param_fit turns it into OFF) is OFF */
 static inline uint32_t sl_mode(const track_t *t) { return (uint32_t)t->p[P_SLCR] > SL_STUT ? (uint32_t)SL_OFF : (uint32_t)t->p[P_SLCR]; }
 

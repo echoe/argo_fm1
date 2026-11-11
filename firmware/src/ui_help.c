@@ -22,6 +22,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"MOD", "[K1]SLOT[K2]SOURCE[K3]DEST"},
     {"FX", "[K1-4]SENDS[FX]HOLD: PERFORM"},
     {"SLICER", "[K1]ON[K2]PATTERN[FX]INSERT"},
+    {"SLICER 2", "[KEYS]STEPS[K2]PAT"},   /* (Argo: the white keys edit the USER pattern) */
     {"INSERT", "[K1]TYPE[FX]DRY / WET"},
     {"INSERT 2", "[K1]DRY / WET[FX]DLY"},
     {"DLY", "[K1-4]ALL TRACKS[FX]REVERB"},
@@ -41,8 +42,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"LANES", H_LANES},
     {"LANES 2", H_LANES},
 #if FELUCCA_SHDRUM
-    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]LAYER B"},
-    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[K4]PULSE WIDTH[EDIT]FX 1"},
+    {"SH LAYER A", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]LAYER B"},
+    {"SH LAYER B", "[K1]ATTACK[K2]DECAY[K3]LEVEL[EDIT]FX 1"},
     {"SH FX 1", "[K1]DRIVE[K2]CLICK[K3]FOLD[K4]CRUSH[EDIT]FX 2"},
     {"SH FX 2", "[K1]FILTER[K2]CUT[K3]RES[K4]FENV[EDIT]VOICE"},
     {"SK SND", "[K1]KICK[K2]SNARE[K3]CLAP[K4]HAT[EDIT]SND 2"},
@@ -66,7 +67,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"CLEAR", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]HOLD[K4]ORDER[ARP]ARP"},   /* (1.8: as its card) */
-    {"STEP", "[REC]WRITE[K1]STEP[SEQ]DETAIL"},   /* (1.5.1: SEQ to DETAIL; 1.8: the keys write once armed) */
+    {"STEP", "[REC]WRITE[SEQ]DETAIL[EDIT]DEL STEP"},   /* (1.5.1: SEQ to DETAIL; 1.8: the keys write once armed) */
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
     {"DETAIL 2", "[K1]PRESET[K2]ACC[K3]SLD[K4]LEN"},
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},

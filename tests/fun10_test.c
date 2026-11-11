@@ -570,6 +570,7 @@ static int formats(void)
         for (i = 0; i < NSTEP; i++)
             step_set_nudge(&a.t[k].step[i], 0);
     }
+    a.slusr = 0;                                      /* (Argo: the USER slicer pattern; no format before FUN10 holds one) */
     memcpy(a.name, "OLD SONG", 9);
     chain_defaults(&a.chain);                         /* a song of rows {slot, repeat} (36 bytes then) */
     a.chain.count = 3;

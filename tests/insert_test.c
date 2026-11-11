@@ -412,7 +412,7 @@ static void test_stored(void)
         const char *u;
         track_t *t = &trk[0];
         for (p = 0; p < NPAGES; p++) {
-            if (str_eq(PAGES[p].title, "SLICER")) ps = p;
+            if (str_eq(PAGES[p].title, "SLICER 2")) ps = p;   /* (Argo: SLICER 2 comes between) */
             if (str_eq(PAGES[p].title, "INSERT")) pi = p;
             if (str_eq(PAGES[p].title, "INSERT 2")) pi2 = p;
             if (str_eq(PAGES[p].title, "DLY")) pd = p;

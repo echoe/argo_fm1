@@ -10308,6 +10308,61 @@ static int test_ux18(void)
     return bad;
 }
 
+/* Argo: the SEQ STEP page flashes EDIT: DEL STEP in the header (where KEYS WRITE STEPS goes) when it is entered, and no other page does */
+static int test_del_step_hint(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    go_title("SLICER");
+    frame();
+    ok = !msg_is("EDIT: DEL STEP");
+    go_title("STEP");
+    frame();
+    ok &= msg_is("EDIT: DEL STEP");
+    bad += check("SEQ STEP: EDIT: DEL STEP flashes in the header when the page is entered, not on other pages", ok);
+    return bad;
+}
+
+/* Argo: SLICER 2 and the USER slicer pattern (PAT 17): the white keys toggle its steps (the first key copies the preset
+ * that was picked), the pattern is the project's (saved and loaded with it), and PAT says USER */
+static int test_slicer_user(void)
+{
+    int bad = 0, ok;
+    uint32_t k, k0 = 99u, k2 = 99u, pre;
+    track_t *t;
+    char v[8];
+    const char *unit;
+    ui_power_on();
+    t = TSEL;
+    for (k = 0; k < 27u; k++)
+        if (!key_black(k)) {
+            if (key_place(k) == 0u && k0 == 99u) k0 = k;
+            if (key_place(k) == 2u && k2 == 99u) k2 = k;
+        }
+    t->p[P_SLCR] = SL_GATE;
+    t->p[P_SLPAT] = 3;
+    go_title("SLICER 2");
+    frame();
+    pre = sl_pattern(t);
+    key_down(k0); frame(); key_up(k0); frame();
+    ok = t->p[P_SLPAT] == 17 && sl_user == (uint16_t)(pre ^ 1u) && sl_pattern(t) == sl_user;
+    key_down(k2); frame(); key_up(k2); frame();
+    ok &= sl_user == (uint16_t)(pre ^ 1u ^ 4u);
+    key_down(k2); frame(); key_up(k2); frame();
+    ok &= sl_user == (uint16_t)(pre ^ 1u) && t->p[P_SLPAT] == 17;
+    bad += check("SLICER 2: a white key toggles its step; the first copies the preset into USER and PAT 17 (USER) plays it", ok);
+    param_format(&TP[P_SLPAT], 17, v, &unit);
+    ok = str_eq(v, "USER");
+    param_format(&TP[P_SLPAT], 16, v, &unit);
+    bad += check("..PAT 17 reads USER, 1..16 their numbers", ok && str_eq(v, "16"));
+    sl_user = 0x0F0Fu;
+    project_save(3);
+    sl_user = 0xFFFFu;
+    project_load(3);
+    bad += check("..the USER pattern is saved with the project and loaded back", sl_user == 0x0F0Fu);
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -10400,6 +10455,8 @@ int main(void)
     bad += test_seq_end_knob();
     bad += test_no_flash();
     bad += test_no_flash_new_pages();
+    bad += test_slicer_user();
+    bad += test_del_step_hint();
     bad += test_ux18();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

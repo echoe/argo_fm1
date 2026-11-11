@@ -579,6 +579,20 @@ static void graph_slicer(const track_t *t, uint16_t c)
             cv_rect(x, 84, 9, 2, T_ACCENT);
     }
 }
+/* SLICER 2 page (Argo): the same 16 steps as a grid to edit, the white keys toggling them (ui_input.c slcr2_keys): a
+ * step bar lit = 'x', a dark one = '.'. While PAT is a preset the grid shows it dimmed: the first key copies it into
+ * USER and switches PAT to USER. The step playing underlined (as SLICER). */
+static void graph_slicer2(const track_t *t, uint16_t c)
+{
+    uint32_t i, pat = sl_pattern(t), mode = sl_mode(t), cur = sl[t - trk].idx, user = t->p[P_SLPAT] == SL_NPAT + 1;
+    uint16_t on = !user || mode == SL_OFF ? T_MID : c;
+    for (i = 0; i < 16u; i++) {
+        int32_t x = bar_x(i);
+        cv_rrect(x, 26, 9, 36, 2, (pat >> i) & 1u ? on : T_RAISE, T_SURF);
+        if (mode != SL_OFF && i == cur)
+            cv_rect(x, 66, 9, 2, T_ACCENT);
+    }
+}
 /* MOD page: the four slots as rows "1 LFO > CUT +50%" (M, a list's rows: the source to x 78, the arrow 84..98, the
  * destination of up to 5 characters 106..160, the amount from 172), the one KNOB 2..4 edit selected, slots that do
  * nothing (SRC, DST or AMT at 0) dim */
@@ -1374,8 +1388,10 @@ static uint32_t graph_signature(void)
     }
     if (pg->graph == GR_MOD)
         h ^= (mod_ui_slot + 1u) * 40503u;
-    if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
+    if ((pg->graph == GR_SLCR || pg->graph == GR_SLCR2) && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    if (pg->graph == GR_SLCR2)                       /* (Argo: the USER pattern's bits, and which pattern plays) */
+        h = (h ^ ((uint32_t)sl_user + 1u) ^ ((uint32_t)t->p[P_SLPAT] << 17)) * 16777619u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -2613,6 +2629,9 @@ static void draw_graph(void)
             break;
         case GR_SLCR:
             graph_slicer(t, c);
+            break;
+        case GR_SLCR2:
+            graph_slicer2(t, c);
             break;
         case GR_INS:
             graph_insert(t, c);

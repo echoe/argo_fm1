@@ -15,17 +15,16 @@
  *                    ^ XMOD (FM: B -> A's phase; RING: A x B) --- + --- CLICK --- FOLD --- DRIVE --- CRUSH --- FILTER
  *     WAVE B --- ENV B --- LEVEL B --/
  *     both oscillators follow the PITCH ENVELOPE: SWEP semitones above (below, if negative) the key at the hit's
- *     start, falling to the key over SWP T. WAVE B sits TUN B semitones from WAVE A.
+ *     start, falling to the key over SWP T. WAVE A sits TUN A semitones from the key, WAVE B TUN B.
  *
- * WAVE A / WAVE B   SIN TRI SAW SQR NOIS PULSE. Each wave is an oscillator with an envelope and a level, a layer. PULSE is a
- *                   pulse wave whose width is the layer's PW (A PW / B PW on the LAYER pages: 0 % a square, 100 % about a
- *                   40th of the cycle, the thin, nasal end; the default 50 % is a quarter): a SQR is always 50 %.
+ * WAVE A / WAVE B   SIN TRI SAW SQR NOIS. Each wave is an oscillator with an envelope and a level, a layer (Argo: as the
+ *                   synth's own, no PULSE wave and no pulse widths).
  * XMOD              how the layers meet: MIX adds them. FM: B modulates A's phase (index 0..16 radians over DPTH,
  *                   B's envelope shapes it: a bright attack that dulls as B dies away), A's envelope and level shape
  *                   the carrier, and B is still heard at its own LEVEL B (0 for a pure modulator). RING: DPTH
  *                   crossfades from the two layers added to their product, the ring modulation of A by B (both
  *                   enveloped, so each layer's decay is the metal's decay): the inharmonic, metallic part of a hat, a
- *                   cowbell or a clap with TUN B on a non-octave interval (square x square, +7 semitones). SYNC: hard
+ *                   cowbell or a clap with TUN A and TUN B on a non-octave interval (square x square, +7 semitones). SYNC: hard
  *                   sync, B the master and A the slave: A restarts its cycle each time B completes one, so what you hear
  *                   has B's pitch (the key plus TUN B) and A's wave as its timbre. DPTH lifts the slave's pitch over its
  *                   own key, up to three octaves, shaped by B's envelope: the classic sync sweep, bright at the hit's
@@ -33,21 +32,21 @@
  * DPTH              the XMOD amount (FM: the index, RING: the crossfade, SYNC: the slave's lift; not used with MIX).
  * A ATK DEC LVL     LAYER A: attack and decay times (the F_TIME table: ATK linear, DEC exponential, the time DEC shows
  *                   is the time to -40 dB) and level. LAYER B the same. The hit ends when both layers have died away.
- * TUN B             wave B's tuning from A, -24..+24 semitones (12 / 19 / 24 are the octave, fifth and double octave
- *                   above: harmonic FM).
+ * TUN A / TUN B     each wave's tuning from the key, -24..+24 semitones (a gap of 12 / 19 / 24 between them is the octave, fifth
+ *                   and double octave: harmonic FM). Both follow the pitch envelope.
  * SWEP / SWP T      the pitch envelope: the depth in semitones (-24..+48) and its decay time.
  *
  * EFFECTS at the end of the hit, in this order, each off at 0:
  * CLIK              a burst of noise (about 3 ms) added at the hit's start: the beater of a kick, the snap of a snare.
  * FOLD              a wave folder: the signal is scaled up to x4 and reflected back at full scale. Adds odd and even harmonics.
- * DRV               a soft clip, x1..x4 into tanh, the level kept.
+ * DRV               a soft clip, x1..x4 into tanh, the level kept (Argo: on the SH FX 1 page, not PITCH).
  * CRSH              bit reduction (up to 12 bits dropped) and a sample hold (down to a quarter of the sample rate).
  * FLT TYP/CUT/RES   an optional 12 dB multimode filter (OFF LP BP HP), the cutoff following wave A's envelope by FENV
  *                   (-64..+63 index steps at full envelope: a falling envelope closes a low-pass over the hit).
  * Beyond these, every track has its own DIST, INSERT, SLICER and the sends; the delay and reverb sit after the engine.
  *
- * Parameters: the eight an engine owns (P_E0..P_E7: WAV A, WAV B, XMOD, DPTH, TUN B, SWEP, SWP T, DRV) are the EDIT 1
- * and EDIT 2 pages and the matrix's E1..E8. The rest are the track's FM operator slots (P_FM1_ATK ..: the ids, stored
+ * Parameters: the eight an engine owns (P_E0..P_E7: WAV A, WAV B, XMOD, DPTH, TUN A, TUN B, SWEP, SWP T) are the EDIT 1
+ * and EDIT 2 pages and the matrix's E1..E8. The rest (with DRV) are the track's FM operator slots (P_FM1_ATK ..: the ids, stored
  * with every project and user preset, that DIGITAL (retired, FELUCCA_FM4=0) used for its operator envelopes and no
  * engine reads otherwise); SHDRUM gives them its own labels, ranges and defaults (shd_xdesc: params.c track_desc,
  * param_desc_of) and four pages of its own (LAYER A, LAYER B, FX 1, FX 2). This keeps P_COUNT, so projects, user
@@ -64,15 +63,15 @@
 enum {
     SHP_AATK = P_FM1_ATK, SHP_ADEC, SHP_ALVL,                  /* LAYER A */
     SHP_BATK, SHP_BDEC, SHP_BLVL,                              /* LAYER B */
-    SHP_CLIK, SHP_FOLD, SHP_CRSH,                              /* FX 1 (with DRV, P_E7) */
+    SHP_CLIK, SHP_FOLD, SHP_CRSH,                              /* FX 1 (with SHP_DRV below) */
     SHP_FTYP, SHP_CUT, SHP_RES, SHP_FENV,                      /* FX 2 */
-    SHP_APW, SHP_BPW,                                          /* LAYER A / B: the width of a PULSE wave (appended: the ids above keep their place) */
+    SHP_DRV,                                                   /* FX 1: the soft clip (Argo: it was P_E7; appended: the ids above keep their place) */
     SHP_END
 };
 #define SHP_N (SHP_END - SHP_AATK)
 _Static_assert(SHP_END <= P_FM4_LEVEL + 1, "SHDRUM: its extra parameters live in the FM operator slots");
 
-static const char *const N_SHD_WAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS", "PULSE"};
+static const char *const N_SHD_WAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
 static const char *const N_SHD_XMOD[] = {"MIX", "FM", "RING", "SYNC"};
 static const char *const N_SHD_FTYP[] = {"OFF", "LP", "BP", "HP"};
 
@@ -83,7 +82,7 @@ static const param_desc_t SHD_X[SHP_N] = {
     {"CLIK", F_PCT, 0, 127, 0, 0, 0},      {"FOLD", F_PCT, 0, 127, 0, 0, 0},      {"CRSH", F_PCT, 0, 127, 0, 0, 0},
     {"FLT", F_ENUM, 0, SHF_COUNT - 1, SHF_OFF, N_SHD_FTYP, 0},
     {"CUT", F_CUTOFF, 0, 127, 100, 0, 0},  {"RES", F_PCT, 0, 127, 20, 0, 0},     {"FENV", F_BIPCT, -64, 63, 0, 0, 0},
-    {"A PW", F_PCT, 0, 127, 64, 0, 0},     {"B PW", F_PCT, 0, 127, 64, 0, 0},
+    {"DRV", F_PCT, 0, 127, 0, 0, 0},
 };
 /* the descriptor of id for this engine: SHD_X inside its slots, else 0 */
 static const param_desc_t *shd_xdesc(uint32_t id)
@@ -99,10 +98,11 @@ static void shd_vp_load(shd_vp_t *q, const int16_t *p)
     q->wb = (uint8_t)clamp(p[P_E1], 0, SHW_COUNT - 1);
     q->xm = (uint8_t)clamp(p[P_E2], 0, SHM_COUNT - 1);
     q->depth = (uint8_t)clamp(p[P_E3], 0, 127);
-    q->tunb = (int8_t)clamp(p[P_E4], -24, 24);
-    q->swep = (int8_t)clamp(p[P_E5], -24, 48);
-    q->swpt = (uint8_t)clamp(p[P_E6], 0, 127);
-    q->drv = (uint8_t)clamp(p[P_E7], 0, 127);
+    q->tuna = (int8_t)clamp(p[P_E4], -24, 24);
+    q->tunb = (int8_t)clamp(p[P_E5], -24, 24);
+    q->swep = (int8_t)clamp(p[P_E6], -24, 48);
+    q->swpt = (uint8_t)clamp(p[P_E7], 0, 127);
+    q->drv = (uint8_t)clamp(p[SHP_DRV], 0, 127);
     q->aatk = (uint8_t)clamp(p[SHP_AATK], 0, 127);
     q->adec = (uint8_t)clamp(p[SHP_ADEC], 0, 127);
     q->alvl = (uint8_t)clamp(p[SHP_ALVL], 0, 127);
@@ -116,8 +116,6 @@ static void shd_vp_load(shd_vp_t *q, const int16_t *p)
     q->cut = (uint8_t)clamp(p[SHP_CUT], 0, 127);
     q->res = (uint8_t)clamp(p[SHP_RES], 0, 127);
     q->fenv = (int8_t)clamp(p[SHP_FENV], -64, 63);
-    q->apw = (uint8_t)clamp(p[SHP_APW], 0, 127);
-    q->bpw = (uint8_t)clamp(p[SHP_BPW], 0, 127);
 }
 
 static void shd_note_on(track_t *t, voice_t *v)
@@ -162,39 +160,39 @@ static void shd_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
 }
 
 /* ------------------------------------------------------------ presets --- */
-/* {WAV A, WAV B, XMOD, DPTH, TUN B, SWEP, SWP T, DRV}, the sends; the slots (SHD_PRESET_X, one row per preset, in
- * SHP_AATK order: A ATK DEC LVL, B ATK DEC LVL, CLIK, FOLD, CRSH, FLT, CUT, RES, FENV). The ENV page (ATK DEC SUS
+/* {WAV A, WAV B, XMOD, DPTH, TUN A, TUN B, SWEP, SWP T}, the sends; the slots (SHD_PRESET_X, one row per preset, in
+ * SHP_AATK order: A ATK DEC LVL, B ATK DEC LVL, CLIK, FOLD, CRSH, FLT, CUT, RES, FENV, DRV). The ENV page (ATK DEC SUS
  * REL) does nothing here: any values. Every kit piece is meant to be played from a low key for the kick, mid for
  * the snare, high for a hat (the key is the pitch); the notes the sound suggests are in the names */
 static const preset_t SHD_PRESETS[] = {
     /* A: a sine body with a long sweep; B: a short noisy click on top; both layers mixed */
-    {"SH KICK", {SHW_SIN, SHW_SIN, SHM_FM, 20, 0, 30, 36, 20}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8)},
+    {"SH KICK", {SHW_SIN, SHW_SIN, SHM_FM, 20, 0, 0, 30, 36}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8)},
     /* A: a triangle body that drops; B: noise, a band-passed rattle; CLIK for the stick */
-    {"SH SNARE", {SHW_TRI, SHW_NOIS, SHM_MIX, 0, 0, 14, 22, 24}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 22)},
+    {"SH SNARE", {SHW_TRI, SHW_NOIS, SHM_MIX, 0, 0, 0, 14, 22}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 22)},
     /* RING of two squares a fifth-and-a-bit apart: the metal, short, high-passed */
-    {"SH HAT", {SHW_SQR, SHW_SQR, SHM_RING, 127, 7, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 10)},
-    {"SH OPEN HAT", {SHW_SQR, SHW_SQR, SHM_RING, 127, 7, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24)},
+    {"SH HAT", {SHW_SQR, SHW_SQR, SHM_RING, 127, 0, 7, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 10)},
+    {"SH OPEN HAT", {SHW_SQR, SHW_SQR, SHM_RING, 127, 0, 7, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24)},
     /* a tuned drum: FM sine with a sweep; play it across the keys */
-    {"SH TOM", {SHW_SIN, SHW_SIN, SHM_FM, 36, 12, 12, 30, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14)},
+    {"SH TOM", {SHW_SIN, SHW_SIN, SHM_FM, 36, 0, 12, 12, 30}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14)},
     /* noise bursts with the filter closing: a clap */
-    {"SH CLAP", {SHW_NOIS, SHW_NOIS, SHM_MIX, 0, 0, 0, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 30)},
+    {"SH CLAP", {SHW_NOIS, SHW_NOIS, SHM_MIX, 0, 0, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 30)},
     /* FM against a non-octave ratio: a bell, a rim, a cowbell */
-    {"SH BELL", {SHW_SIN, SHW_SIN, SHM_FM, 70, 19, 0, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 34)},
+    {"SH BELL", {SHW_SIN, SHW_SIN, SHM_FM, 70, 0, 19, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 34)},
     /* a laser: a square with a deep, slow sweep */
-    {"SH ZAP", {SHW_SQR, SHW_SAW, SHM_RING, 64, 5, 36, 50, 48}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 6, 20)},
+    {"SH ZAP", {SHW_SQR, SHW_SAW, SHM_RING, 64, 0, 5, 36, 50}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 6, 20)},
 #include "presets_shdrum.inc"          /* (tools/gen_presets.py: more factory presets) */
 };
 #define SHD_NPRESETS NELEM(SHD_PRESETS)
 static const int8_t SHD_PRESET_X[SHD_NPRESETS][SHP_N] = {
-    /*  A: ATK DEC LVL  B: ATK DEC LVL  CLIK FOLD CRSH FLT CUT RES FENV */
-    {0, 78, 127, 0, 40, 40, 20, 0, 0, SHF_OFF, 100, 20, 0},     /* KICK */
-    {0, 58, 100, 0, 62, 100, 40, 0, 0, SHF_LP, 108, 20, 0},     /* SNARE */
-    {0, 40, 100, 0, 36, 70, 0, 0, 0, SHF_HP, 90, 30, 0},        /* HAT */
-    {0, 66, 100, 0, 60, 70, 0, 0, 0, SHF_HP, 90, 30, 0},        /* OPEN HAT */
-    {0, 76, 100, 0, 40, 50, 10, 0, 0, SHF_OFF, 100, 20, 0},     /* TOM */
-    {0, 62, 100, 0, 56, 100, 0, 30, 0, SHF_BP, 80, 50, 0},      /* CLAP */
-    {0, 90, 90, 0, 76, 40, 0, 0, 0, SHF_OFF, 100, 20, 0},       /* BELL */
-    {0, 70, 100, 0, 60, 80, 0, 0, 0, SHF_OFF, 100, 20, 0},      /* ZAP */
+    /*  A: ATK DEC LVL  B: ATK DEC LVL  CLIK FOLD CRSH FLT CUT RES FENV DRV */
+    {0, 78, 127, 0, 40, 40, 20, 0, 0, SHF_OFF, 100, 20, 0, 20},     /* KICK */
+    {0, 58, 100, 0, 62, 100, 40, 0, 0, SHF_LP, 108, 20, 0, 24},     /* SNARE */
+    {0, 40, 100, 0, 36, 70, 0, 0, 0, SHF_HP, 90, 30, 0, 0},        /* HAT */
+    {0, 66, 100, 0, 60, 70, 0, 0, 0, SHF_HP, 90, 30, 0, 0},        /* OPEN HAT */
+    {0, 76, 100, 0, 40, 50, 10, 0, 0, SHF_OFF, 100, 20, 0, 0},     /* TOM */
+    {0, 62, 100, 0, 56, 100, 0, 30, 0, SHF_BP, 80, 50, 0, 16},      /* CLAP */
+    {0, 90, 90, 0, 76, 40, 0, 0, 0, SHF_OFF, 100, 20, 0, 0},       /* BELL */
+    {0, 70, 100, 0, 60, 80, 0, 0, 0, SHF_OFF, 100, 20, 0, 48},      /* ZAP */
 #include "presets_shdrum_x.inc"          /* (tools/gen_presets.py: more factory presets) */
 };
 
@@ -204,7 +202,7 @@ static void shd_load(track_t *t, uint32_t pi)
 {
     uint32_t i;
     for (i = 0; i < SHP_N; i++)
-        t->p[SHP_AATK + i] = pi < SHD_NPRESETS && i < SHP_FENV - SHP_AATK + 1 ? (int16_t)SHD_PRESET_X[pi][i] : SHD_X[i].def;   /* (the PW slots: no preset sets them) */
+        t->p[SHP_AATK + i] = pi < SHD_NPRESETS ? (int16_t)SHD_PRESET_X[pi][i] : SHD_X[i].def;
 }
 static void shd_defaults(track_t *t)
 {
@@ -221,17 +219,17 @@ static const engine_t ENG_SHDRUM = {
         {"WAV B", F_ENUM, 0, SHW_COUNT - 1, SHW_SIN, N_SHD_WAVE, 0},
         {"XMOD", F_ENUM, 0, SHM_COUNT - 1, SHM_MIX, N_SHD_XMOD, 0},
         {"DPTH", F_PCT, 0, 127, 0, 0, 0},
+        {"TUN A", F_SEMI, -24, 24, 0, 0, 0},
         {"TUN B", F_SEMI, -24, 24, 0, 0, 0},
         {"SWEP", F_SEMI, -24, 48, 0, 0, 0},
         {"SWP T", F_TIME, 0, 127, 40, 0, 0},
-        {"DRV", F_PCT, 0, 127, 0, 0, 0},
     },
     .presets = SHD_PRESETS,
     .npresets = SHD_NPRESETS,
     .note_on = shd_note_on,
     .render = shd_render,
     .amp = shd_amp,
-    .knob = {P_E5, P_E3, SHP_ADEC, SHP_BDEC},      /* HOME: SWEP DPTH A DEC B DEC */
+    .knob = {P_E6, P_E3, SHP_ADEC, SHP_BDEC},      /* HOME: SWEP DPTH A DEC B DEC */
     .poly = 0,
     .sampled = 1,                                  /* a hit restarts its phases (no phases kept over a retrigger) */
     .oneshot = 1,
