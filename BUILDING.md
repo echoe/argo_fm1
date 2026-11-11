@@ -59,10 +59,10 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 1.8.1` makes a release build: the package identity becomes `FM-1_918`
-and the version string `v1.8.1`; the package is `build/argo-1.8.1.fwsc`, and
-`build/release-1.8.1/` holds what a release ships: the package, the app
-(`felucca-1.8.1-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
+`./build.sh --release 1.8.2` makes a release build: the package identity becomes `FM-1_918`
+and the version string `v1.8.2`; the package is `build/argo-1.8.2.fwsc`, and
+`build/release-1.8.2/` holds what a release ships: the package, the app
+(`felucca-1.8.2-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
 `LICENSES/` (the package contains Apache-2.0 SDK files, so the licence texts travel with it).
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `core.h` and `icons.c`):
