@@ -1,0 +1,7 @@
+{
+  "what": "An LLM-written expansion of Felucca with samples removed and a few synth engines added, with a focus on multiple patterns per track, per-step patch switching, and synthesis.",
+  "author": "echoe",
+  "kinds": ["groove"],
+  "editor": "https://echoe.github.io/argo_fm1/webapp/editor/",
+  "color": "#FA8069"
+}

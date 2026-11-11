@@ -26,7 +26,7 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 
 ## Development and support
 
-Argo is built fully with generative AI, piggybacking off of the work of Felucca. As is also true with Felucca, the
+Argo is built almost entirely with free generative AI, piggybacking off of the work of Felucca. As is also true with Felucca, the
 design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
 icons or artwork. This README was initially written by AI as it edited the repo; it was then imperfectly hand-edited for clarity. (If you see something that reads in a confusing way, please feel free to open an issue.)
 
@@ -34,12 +34,13 @@ I am trying to not take making this firmware extremely seriously, because then i
 
 ## Credits and license
 
+In general, this entire project is GPL 3.0, as Felucca was/is.
 Free software: [GPL-3.0-only](LICENSE); the Hügelton Sample Pack is CC0 1.0, but should be fully removed; the engines in `firmware/engines` are MIT
 ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines)); the hardware layer in `firmware/bsp` is MPL-2.0
 ([felucca-bsp](https://github.com/hugelton/felucca-bsp)); the bundled fonts and ported DSP keep their own licences
 ([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Additional engines are as listed in the overview.
 Carried over from Felucca, thanks to everyone whose work and contributions are in Felucca as listed here: [CREDITS.md](CREDITS.md).
-This includes the engines:
+This includes the standard engines:
 VOICE engine: after klattsch by Tony Gies (MIT); formant data from Klatt (1980) and Hillenbrand et al. (1995)
 PHYS engine: models ported from DaisySP by Electrosmith and Emilie Gillet (MIT) and from Emilie Gillet's eurorack code (MIT)
 FM6 engine: msfa from Dexed by Google Inc. and Pascal Gauthier (Apache-2.0)
@@ -49,13 +50,16 @@ M-VAVE and FM-1 are trademarks of their respective owners. Argo is not affiliate
 # The differences between this and Felucca
 
 Argo is built off of Felucca, just with a few tweaks. The 'selling point' features are:
--Eight sequences per track [and a sequence chain option to do up to 512 steps per track] that you can swap between live. This was the initial single change.
--Patch swapping per step [only within the same synth engine, but still].
+-Eight sequences per track that you can swap between live, and one sequence chain per track. This was the initial single change.
+-Patch swapping per step [only within the same synth engine].
 -A generative sequencer.
 -Greatly expanded and playable chord modes.
 -Different synth engines.
 -Various effects tweaks and other tweaks.
 -No samples.
+Pictures of the new features, which may be worth a thousand words:
+
+<img src="docs/pics/patterns.png" width="200" height="200" /> <img src="docs/pics/chord.png" width="200" height="200" /> <img src="docs/pics/generative_arp.png" width="200" height="200" /> <img src="docs/pics/preset_swap.png" width="200" height="200" />
 
 We'll go through these in order.
 
