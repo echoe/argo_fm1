@@ -10308,6 +10308,21 @@ static int test_ux18(void)
     return bad;
 }
 
+/* Argo: the SEQ STEP page flashes EDIT: DEL STEP in the header (where KEYS WRITE STEPS goes) when it is entered, and no other page does */
+static int test_del_step_hint(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    go_title("SLICER");
+    frame();
+    ok = !msg_is("EDIT: DEL STEP");
+    go_title("STEP");
+    frame();
+    ok &= msg_is("EDIT: DEL STEP");
+    bad += check("SEQ STEP: EDIT: DEL STEP flashes in the header when the page is entered, not on other pages", ok);
+    return bad;
+}
+
 /* Argo: SLICER 2 and the USER slicer pattern (PAT 17): the white keys toggle its steps (the first key copies the preset
  * that was picked), the pattern is the project's (saved and loaded with it), and PAT says USER */
 static int test_slicer_user(void)
@@ -10441,6 +10456,7 @@ int main(void)
     bad += test_no_flash();
     bad += test_no_flash_new_pages();
     bad += test_slicer_user();
+    bad += test_del_step_hint();
     bad += test_ux18();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
