@@ -83,8 +83,9 @@ You can switch patterns either immediately, or at the end of a page. This settin
 
 ## SLICER 2
 
-The SLICER has a USER pattern (PAT 17). On the SLICER 2 page the white keys toggle its 16 steps (the first key copies the preset you had
+In FX, the SLICER has a USER pattern (PAT 17). On the SLICER 2 page the white keys toggle its 16 steps (the first key copies the preset you had
 selected). There is one USER pattern per project, saved with it.
+The keys still play notes so watch out if you're doing it live :)
 
 ## A generative mode within ARP
 
@@ -163,5 +164,4 @@ Note: The last 16 presets can't hold FM6 patches.
 
 ## Todo
 
--Removing phrases, if possible.
--Figure out how to put on the screen that you delete a step by pressing the edit button, in the SEQ screen. It took me forever to find this in Felucca and it would be good.
+Nothing for now. If we want things in the future we can remove patterns.
