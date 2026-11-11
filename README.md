@@ -3,12 +3,16 @@
 ## About this project
 
 Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1 that is built off of Felucca, removing the samples and adding in different engines.
+
 To install this on the FM-1, first connect the FM-1 to a computer by USB, open the
 [web installer](https://echoe.github.io/argo_fm1/) in Chrome or Edge, and press Install. No extra hardware is needed.
-Installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** takes you back.
+
+You can also try out this firmware by downloading the package and using it with [this web emulator](https://joakimeriksson.github.io/fm1-emu/?fw=local&mhz=100) .
+
+I've tested this only on my own personal FM-1, so installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** should take you back to stock, or you should be able to flash another firmware after trying out this one.
 You can also install locally using tools/fm1_install.sh. Details on how exactly to do that are in BUILDING.md.
 
-NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Bootloader](https://github.com/jvitkauskas/m-bootloader) to ensure you can boot to reflash your device if you have any issues.
+NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Bootloader](https://github.com/jvitkauskas/m-bootloader) to ensure you can boot to reflash your device if you have any issues!
 
 - Install Argo: [web installer](https://echoe.github.io/argo_fm1/)
 - Edit (upload patches, edit fm6 patches): [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
