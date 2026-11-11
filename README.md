@@ -49,6 +49,8 @@ Argo is built off of Felucca, just with a few tweaks. A TLDR is that there's a g
 
 Pictures of the new features, which may be worth a thousand words:
 
+<img src="docs/pics/patterns.png" width="200" height="200" /> <img src="docs/pics/chord.png" width="200" height="200" /> <img src="docs/pics/generative_arp.png" width="200" height="200" /> <img src="docs/pics/preset_swap.png" width="200" height="200" />
+
 ## No samples or engines that use samples are in this firmware
 
 No samples - or audio engines with samples - are used. This frees up space for other features; I wanted to focus on synth sounds specifically.
