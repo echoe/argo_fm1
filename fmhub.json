@@ -1,0 +1,10 @@
+{
+  "what": "Argo is a free LLM-written expansion built off of Felucca with a focus on pattern, patch-switching, and synthesis.",
+  "author": "echoe",
+  "kinds": ["groove"],
+  "play": "https://echoe.github.io/argo_fm1/emu/",
+  "editor": "https://echoe.github.io/argo_fm1/editor/",
+  "cheat": "https://echoe.github.io/argo_fm1/cheatsheet.pdf",
+  "image": "docs/card.png",
+  "color": "#FF7A00"
+}
