@@ -149,7 +149,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_PAN] = PD("PAN", F_BIPCT, -64, 63, 0),
     [P_MUTE] = PE("MUTE", N_ONOFF, 0),
     [P_SLCR] = PE("SLCR", N_SLCR, 0),
-    [P_SLPAT] = PD("PAT", F_INT, 1, 16, 1),        /* SL_PAT[] */
+    [P_SLPAT] = PD("PAT", F_INT, 1, 17, 1),        /* SL_PAT[]; 17 = USER (slicer.c sl_user, the project's; SLICER 2): param_format says so */
     [P_SLRATE] = PE("RATE", N_SLDIV, 1),
     [P_SLDEPTH] = PD("DEPTH", F_PCT, 0, 127, 127),
 #define MSLOT(k) [P_M##k##SRC] = PE("SRC" #k, N_MSRC, 0), [P_M##k##DST] = PE("DST" #k, N_MDST, 0), \
@@ -504,6 +504,8 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
             while (d->names[k])
                 k++;
             str_cpy(val, d->names[(uint32_t)(clamp(v, d->min, d->max) - d->min) * k / (uint32_t)(d->max - d->min + 1)], 7);
+        } else if (d == &TP[P_SLPAT] && v > 16) {       /* PAT 17 (Argo) */
+            str_cpy(val, "USER", 7);
         } else {
             fmt_int(val, v);
         }
@@ -519,7 +521,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_SEQS, GR_GENS, GR_CPK };   /* GR_SEQS (1.6): SEQ > SEQUENCE, the eight sequences of each track */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_SEQS, GR_GENS, GR_CPK, GR_SLCR2 };   /* GR_SLCR2 (Argo): SLICER 2, the USER pattern's 16-step grid */   /* GR_SEQS (1.6): SEQ > SEQUENCE, the eight sequences of each track */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
 typedef struct {
     const char *title;
@@ -538,6 +540,7 @@ static const page_t PAGES[] = {
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
+    {"SLICER 2", FAM_FX, SC_TRACK, GR_SLCR2, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},   /* Argo: the white keys toggle the USER pattern's 16 steps */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
@@ -557,9 +560,9 @@ static const page_t PAGES[] = {
 #if FELUCCA_SHDRUM
     /* SHDRUM only (eng_shdrum.c; ui.c page_visible: the titles that start with "SH "): its layers' envelopes and levels
      * and its effects, in the track's FM operator slots under SHDRUM's own labels (shd_xdesc) */
-    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, SHP_APW}},
-    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, SHP_BPW}},
-    {"SH FX 1", FAM_EDIT, SC_TRACK, GR_NONE, {P_E7, SHP_CLIK, SHP_FOLD, SHP_CRSH}},
+    {"SH LAYER A", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_AATK, SHP_ADEC, SHP_ALVL, 0xFF}},
+    {"SH LAYER B", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_BATK, SHP_BDEC, SHP_BLVL, 0xFF}},
+    {"SH FX 1", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_DRV, SHP_CLIK, SHP_FOLD, SHP_CRSH}},   /* (Argo: DRV left PITCH for here) */
     {"SH FX 2", FAM_EDIT, SC_TRACK, GR_NONE, {SHP_FTYP, SHP_CUT, SHP_RES, SHP_FENV}},
     /* DRUM with KIT SH only (eng_drum.c; ui.c page_visible: the titles that start with "SK "): the lanes' sounds and tuning */
     {"SK SND", FAM_EDIT, SC_TRACK, GR_NONE, {SKP_SND0, SKP_SND0 + 1, SKP_SND0 + 2, SKP_SND0 + 3}},

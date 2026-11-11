@@ -562,6 +562,8 @@ static void page_entered(void)
     ui.act = pg->graph == GR_USER ? 4u : 0u;     /* the save screen is ready for OCT+ */
     ui.tl_clean = 0;
     help_start();
+    if (!ui.home && pg->graph == GR_ROLL && song.seq_mode && str_eq(pg->title, "STEP"))   /* Argo: the SEQ STEP page (not DETAIL, which shares its graph), flashed in the header like "KEYS WRITE STEPS": EDIT on a step clears it */
+        ui_message("EDIT: DEL STEP");
     ui.force = 1;
 }
 

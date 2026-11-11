@@ -1,4 +1,4 @@
-# Building Felucca for the M-VAVE FM-1
+# Building Argo for the M-VAVE FM-1
 
 This repository builds firmware for the FM-1 only. Host-side tests are development tools, not supported application platforms.
 
@@ -12,18 +12,12 @@ The build makes three files in `build/`:
 
 ## Get the source
 
-Two parts are git submodules: six engines (`firmware/engines/`, [Felucca-Engines](https://github.com/hugelton/Felucca-Engines),
-MIT) and the hardware layer (`firmware/bsp/`, [felucca-bsp](https://github.com/hugelton/felucca-bsp), MPL-2.0), so clone
-with `--recurse-submodules`:
-
+Simply clone this repo:
 ```
-git clone --recurse-submodules https://github.com/hugelton/Felucca.git
+git clone https://github.com/echoe/argo_fm1.git
 ```
 
-In a clone made without it, run `git submodule update --init` once. GitHub's "Download ZIP" and the source archives
-it adds to a release leave `firmware/engines/` and `firmware/bsp/` empty; each release also has
-`felucca-X.Y.Z-source.tar.gz`, the whole source with the submodules' files in it. The build stops with
-"firmware/engines is empty" or "firmware/bsp is empty" when they are missing.
+Felucca normally requires installing submodules but I've just plopped all the required code directly into this repository.
 
 ## Prerequisites (macOS)
 
@@ -48,7 +42,14 @@ it adds to a release leave `firmware/engines/` and `firmware/bsp/` empty; each r
 
 - Node.js (optional, for the web tests).
 
-On Linux x86-64 the toolchain runs natively and Docker is not needed.
+On Linux x86-64 the toolchain runs natively and Docker is not needed. You will still need to get development tools and python3, here's what I ran:
+
+```
+sudo dnf install @development-tools
+sudo dnf install python3-devel
+sudo dnf install gcc #I know development-tools should install this but somehow it doesn't
+pip install mido python-rtmidi #this depends on the version of python you're using/etc., you may want to use pip3
+```
 
 ## Build
 
@@ -59,10 +60,10 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 1.8.1` makes a release build: the package identity becomes `FM-1_918`
-and the version string `v1.8.1`; the package is `build/argo-1.8.1.fwsc`, and
-`build/release-1.8.1/` holds what a release ships: the package, the app
-(`felucca-1.8.1-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
+`./build.sh --release 1.8.2` makes a release build: the package identity becomes `FM-1_918`
+and the version string `v1.8.2`; the package is `build/argo-1.8.2.fwsc`, and
+`build/release-1.8.2/` holds what a release ships: the package, the app
+(`felucca-1.8.2-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
 `LICENSES/` (the package contains Apache-2.0 SDK files, so the licence texts travel with it).
 
 Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `core.h` and `icons.c`):
@@ -142,5 +143,12 @@ cd /tmp/felucca-site && python3 -m http.server 8000
 # open http://localhost:8000/webapp/installer/
 ```
 
-Installing firmware is at your own risk. If an install fails and the FM-1 no longer
+To make this for Github Pages:
+
+```
+python3 web/make_site.py build/argo.fwsc argo-1.8.2 website
+```
+Then copy the resulting files into the folder you're building within Github Pages; it should start serving automatically.
+
+NOTE: Installing firmware is at your own risk. If an install fails and the FM-1 no longer
 starts, recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).

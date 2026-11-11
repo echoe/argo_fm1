@@ -799,6 +799,27 @@ static uint64_t lock_held(void)
 }
 
 /* each pass, before the grid's keys: a hit pressed on goes once its key is let go (plk_rm, grid_keys) */
+/* SLICER 2 (Argo): a white key toggles its step (the key's place 0..15) of the USER pattern (the project's, slicer.c sl_user). PAT on a preset: the first
+ * key copies that preset into USER and switches PAT to it, so a preset can be taken and bent. KNOB 1..4 as on SLICER */
+static void slcr2_keys(uint32_t pressed)
+{
+    uint32_t k;
+    for (k = 0; k < 27u; k++) {
+        uint32_t p;
+        if (!((pressed >> k) & 1u) || key_black(k))
+            continue;
+        p = key_place(k);
+        if (p >= 16u)
+            continue;
+        if (TSEL->p[P_SLPAT] != SL_NPAT + 1) {
+            sl_user = (uint16_t)sl_pattern(TSEL);
+            TSEL->p[P_SLPAT] = SL_NPAT + 1;
+            ui_message("PAT USER");
+        }
+        sl_user = (uint16_t)(sl_user ^ (1u << p));
+    }
+}
+
 static void lock_keys(void)
 {
     uint64_t gone = ui.plk_rm & ~lock_held();
@@ -1936,6 +1957,8 @@ static void ui_input(void)
         song_keys(notes);
     } else if (song.grid) {
         grid_keys(notes);
+    } else if (cur_page()->graph == GR_SLCR2 && !ui.home && !ui.menu && !ui.confirm && !ui.layer && !name_on() && notes) {
+        slcr2_keys(notes);                              /* SLICER 2: the white keys toggle the USER pattern's steps */
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP */
         if (live_rec_sel() || !((song.rec >> song.sel) & 1u))   /* armed and playing: the keys record live, not
                                                          * into the cursor step too; not armed (1.2, #133): they
