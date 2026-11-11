@@ -1221,6 +1221,11 @@ static uint32_t persist_retry_ms;
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
+#ifdef FELUCCA_FAVORITES
+    favorites.factory[15][24] |= 0x10u;            /* Argo: MENU > CONTROL 2 > SELECT starts as PAGE (ui.c PREF_SEL_PAGE: bit 4 of ui_prefs2).
+                                                    * Only a power-on with no saved settings keeps it: a saved record (below) replaces all of
+                                                    * favorites, so a SELECT chosen before stays as chosen, BPM included */
+#endif
 #if FELUCCA_FLASH
     persist_t p;
     uint32_t f = irq_save();

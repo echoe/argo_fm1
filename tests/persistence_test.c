@@ -724,6 +724,18 @@ int main(void)
     settings_save();
     bad += check("PLAY consumed before the settings snapshot defers the write",
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
+    {   /* Argo: SELECT (MENU > CONTROL 2) starts as PAGE on a power-on with no saved settings; a saved record decides after that */
+        persist_t q;
+        memset(&favorites, 0, sizeof favorites);
+        persist_boot();
+        bad += check("Argo: no saved settings, SELECT starts as PAGE (ui_prefs2 bit 4, the rest 0)", favorites.factory[15][24] == 0x10u);
+        memset(&q, 0, sizeof q);
+        q.magic = PERSIST_MAGIC;
+        q.palette = palette_to_stored(2);
+        q.panel = PANEL_DEFAULT;                    /* (a record saved with SELECT = BPM: bit 4 clear) */
+        bad += check("... a saved record with SELECT BPM replaces it: BPM stays BPM",
+                     settings_import(&q, sizeof q) == 1 && !(favorites.factory[15][24] & 0x10u));
+    }
     bad += mig_test();
     bad += autosave_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");

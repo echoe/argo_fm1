@@ -64,9 +64,9 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_DISPLAY,                                                           /* HOME (1.3) */
     MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL,                 /* HOLD KNOB ACCEL FX LATCH BPM LOCK */
     MTAB_CONTROL,                                                           /* SCALE LEDS (1.2) */
-    MTAB_CONTROL, MTAB_CONTROL,                                             /* STEP PREVIEW, CHORD ENTRY (1.2) */
-    MTAB_CONTROL,                                                           /* SELECT (1.5.5) */
-    MTAB_CONTROL2,                                                          /* SEQ SWITCH (1.6.1_sequences; CONTROL is full) */
+    MTAB_CONTROL2, MTAB_CONTROL2,                                           /* STEP PREVIEW, CHORD ENTRY (1.2; Argo: CONTROL 2) */
+    MTAB_CONTROL2,                                                          /* SELECT (1.5.5; Argo: CONTROL 2) */
+    MTAB_CONTROL2,                                                          /* SEQ SWITCH (1.6.1_sequences) */
     MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
                                                                              * COUNT-IN */
     MTAB_AUDIO,                                                             /* TUNE (1.2) */
