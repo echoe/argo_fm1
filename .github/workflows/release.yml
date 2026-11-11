@@ -1,0 +1,15 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    uses: zvenson/fm1-build/.github/workflows/build.yml@v1
+    permissions:
+      contents: write        # the release
+      id-token: write        # the signing certificate
+      attestations: write    # the attestation
+    with:
+      build: ./build.sh --release "${GITHUB_REF_NAME#v}"   # your build command
+      packages: build/*.fwsc                                # the package(s) it makes
+      # test: sh tests/run_tests.sh                       # optional
