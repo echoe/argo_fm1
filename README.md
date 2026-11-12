@@ -74,7 +74,7 @@ Argo is built off of Felucca, just with a few tweaks. The 'selling point' featur
 
 Pictures of the new features, which may be worth a thousand words:
 
-<img src="docs/pics/patterns.png" width="200" height="200" /> <img src="docs/pics/chord.png" width="200" height="200" /> <img src="docs/pics/generative_arp.png" width="200" height="200" /> <img src="docs/pics/preset_swap.png" width="200" height="200" />
+<img src="docs/pics/patterns.png" width="200" height="200" /> <img src="docs/pics/preset_swap.png" width="200" height="200" /> <img src="docs/pics/generative_arp.png" width="200" height="200" /> <img src="docs/pics/chord.png" width="200" height="200" />  
 
 We'll go through these in order.
 
@@ -114,12 +114,12 @@ Everything that affects the ARP also affects this generative mode - for instance
 - The knobs are saved with the sequence banks (project SAVE, RESTORE LAST); the loop itself is made when GEN starts and when a project loads, and keeps through STOP and PLAY.
 - Record-arm a track to record the generated notes into the underlying sequence if it makes something you really like!
 
-## Chord Improvements
+## Chord Improvements and modes
 
-Multiple new chord-playing methods have been added to this firmware.
+Multiple new chord-playing modes have been added to this firmware.
 
 The CHORD page's CHRD has three new values. Two of them, **STR3** and **STR7**, use the black keys to select a chord, which changes what the white keys are.
-With that black key held, you can play the white keys as all of the notes in that chord. The LLM says it this way:
+Then, with that black key held, you can play the white keys as all of the notes in that chord, either strumming a chord or playing a chord as you want. The LLM says it this way:
 
 - **Black keys** (F#3 .. F#5, eleven) choose the chord and make no sound: the diatonic triad (STR3) or seventh (STR7) on the scale's
   1st, 2nd, 3rd ... degree (the track's ROOT and SCALE; a chromatic scale uses the major scale of ROOT), the keys past the scale's
@@ -130,7 +130,7 @@ With that black key held, you can play the white keys as all of the notes in tha
   UNISON part plays the strings one at a time. MIDI notes, the arp and kits (DRUM, slices) play as with CHRD OFF.
 
 There is also a third new value for CHRD, **PLAY**, inspired by a popular chord engine VST. Every white key plays its chord (EG: C plays a C chord), and the 
-black keys that are held with it shape the chord. The black keys make no sound by themselves. You can also set what each black key does, to set it up to your liking.
+black keys that are held with it shape the chord. The black keys make no sound by themselves. You can also set what each black key does to set it up to your liking.
 With the built in POP pack, for example, keys are set like this: 
 key 1 MIN, key 2 MIN7, key 3 7, key 4 MAJ7, key 5 SUS4, key 6 SUS2,
 key 7 DIM, key 8 +9, key 9 6, key 10 STRM, key 11 ARP. 
@@ -175,9 +175,24 @@ The unique synth in this firmware is:
   - Drive/Click/Fold/Crush end of chain effects.
   - An ending LP/BP/HP filter.
 
-## Additional effects changes
+## Other changes
 
-### USER Slicer settings on the SLICER 2 page
+### SELECT is set to PAGE by default
+
+Select should be page. It's set to page. You can still change it in the menu, but it's set to page between pages by default
+
+### 48 user presets
+
+We've removed the saved patterns from presets in order to have more space to add additional presets. 
+Note: The last 16 presets can't hold FM6 patches. This is due to some weird patch rules with those patches specifically.
+
+### EDIT: DEL STEP reminder when opening the sequencer menu
+
+I always forget that EDIT deletes a step within the sequencer, and nobody ever turns on the help menus. So now it flashes when you open the sequencer up. I am still feeling this change out but I think it's good?
+
+## Effects changes
+
+### USER Slicer setting on the SLICER 2 page
 
 In FX, the SLICER has a USER pattern (PAT 17). On the SLICER 2 page the white keys toggle its 16 steps (the first key copies the preset you had
 selected). There is one USER pattern per project, saved with it.
@@ -187,15 +202,6 @@ The keys still play notes so watch out if you're doing it live :)
 
 We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed. They're pretty simple but still fun!
 
-### 48 user presets
-
-We've removed the saved patterns from presets in order to have more space to add additional presets. 
-Note: The last 16 presets can't hold FM6 patches.
-
-### EDIT: DEL STEP reminder when opening the sequencer menu
-
-I always forget this, and nobody ever turns on the help menus. So now it's there. I am still feeling this change out but I think it's good? YMMV of course.
-
 ## Todo
 
-Nothing for now. If we want more things in the future ... possibly we can remove patterns? But it's not necessary.
+Nothing for now. If we want more things in the future, I'm looking at removing patterns (the ones in the save menu) - but they're so built into everything that it's not worth removing them at this time.
