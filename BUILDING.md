@@ -10,6 +10,19 @@ The build makes three files in `build/`:
 | `loader/ota.bin` | the update loader |
 | `argo.fwsc` | the installable package (app + loader) |
 
+For this repository to build, now that it has an automatic firmware build, you can simply push a tag:
+
+```
+git tag v1.8.3 && git push origin v1.8.3
+```
+
+If the tag is broken simply delete the tag and repush:
+
+```
+git push --delete origin v1.8.3
+git tag -d v1.8.3
+```
+
 ## Get the source
 
 Simply clone this repo:
