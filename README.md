@@ -93,9 +93,9 @@ The page that shows this is at the end of the SEQ menu. The P1 - P4 knobs pick t
 
 ## Preset changing per step
 
-You can set a different preset per step. The preset needs to be of the same synth engine as the track is set to, and it resets on every step - because there are only 64 actions per track you may feel this limiting if you have a lot of different ideas, but you can get around it with some creative workarounds.
-To do this in the easiest way, go to SEQ, choose your step [with K1], and then page to the DETAIL 2 page. You can then scroll through and select a preset, and see if different presets are set for the 16 steps SEQ is currently set to view.
-If you prefer setting this in list mode, you can also set the specific action individually on the 4th page of the SEQ menu.
+You can set a different preset per step, and this can change per sequence. The preset needs to be of the same synth engine as the track is set to, and it resets on every step. There is an upper limit of 64 changes per sequence so beware - if you want to make a lot of changes, you may hit that limit.
+To do this in the easiest way, go to SEQ, choose your step [with K1], and then page to the DETAIL 2 page. You can then scroll through and select a preset, and see if different presets are set for the 16 steps SEQ is currently set to view. You can also change the current step you're selecting with PRESET in this mode.
+If you prefer setting this in a list, you can also set the specific action individually on the 4th page of the SEQ menu, which lists all changes within the sequence.
 
 ## The generative arpeggiator
 
