@@ -11,7 +11,7 @@ jobs:
       attestations: write    # the attestation
     with:
       build: |
-        pip install fonttools
+        pip install fonttools                             # needed to build properly on top of this
         ./build.sh --release "${GITHUB_REF_NAME#v}"       # your build command
-      packages: build/argo-"${GITHUB_REF_NAME#v}".fwsc    # the package(s) it makes
+      packages: build/argo-*.fwsc                         # the package(s) it makes
       # test: sh tests/run_tests.sh                       # optional
