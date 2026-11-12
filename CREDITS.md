@@ -1,5 +1,7 @@
 # Credits
 
+Argo is built off of Felucca.
+
 Felucca is Leo Kuroshita's ([@kurogedelic](https://github.com/kurogedelic), [Hügelton Instruments](https://hugelton.com)). It uses and
 thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICENSING.md](LICENSING.md) and [LICENSES/](LICENSES/)).
 
@@ -13,8 +15,6 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
 - VOICE engine: after [klattsch](https://github.com/tgies/klattsch) by Tony Gies (MIT); formant data from Klatt (1980) and Hillenbrand et al. (1995)
 - PHYS engine: models ported from [DaisySP](https://github.com/electro-smith/DaisySP) by Electrosmith and Emilie Gillet ([MIT](LICENSES/MIT-DaisySP.txt)) and from Emilie Gillet's [eurorack](https://github.com/pichenettes/eurorack) code ([MIT](LICENSES/MIT-Rings.txt))
 - FM6 engine: msfa from [Dexed](https://github.com/asb2m10/dexed) by Google Inc. and Pascal Gauthier ([Apache-2.0](LICENSES/Apache-2.0-msfa.txt))
-- SWARM, FMTONE and WAVETONE engines (and the resonant voice filter they share, `firmware/src/rsvf.c`): ported from [Mini-Tone](https://github.com/eldontyrellcorp/Mini-Tone), a Felucca fork, by eldontyrellcorp and Stephane Schmitz ([GPL-3.0-only](LICENSE))
-- DRUM-X (the DRUM engine's sound: `firmware/src/drumx_voice.c` and its nine factory kits): ported from [JIANT](https://github.com/juanjiant-bit/JIANT), a Felucca fork, by Juan Ignacio Antonucci ([GPL-3.0-only](LICENSE)); after the idea of Sonic Charge's Microtonic
 - ADPCM engine (kept in the tree, off by default: `FELUCCA_ADPCM=1`): its DSP from snes_spc by Shay Green ([LGPL-2.1-or-later](LICENSES/LGPL-2.1-snes_spc.txt)), ported by [ugotworms](https://github.com/ugotworms) (#172)
 - Hardware layer: [felucca-bsp](https://github.com/hugelton/felucca-bsp) ([MPL-2.0](LICENSES/MPL-2.0-felucca-bsp.txt)), maintained by
   [charlesvestal](https://github.com/charlesvestal) and [keremimo](https://github.com/keremimo); its authors in `firmware/bsp/NOTICE`
@@ -33,3 +33,7 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
   [gospodindilly-ops](https://github.com/gospodindilly-ops) (the second core, #247),
   [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
   (external MIDI-clock sequencer and ARP phase drift fix, #269; TRS MIDI clock timestamping under CC load, #258)
+
+Argo also separately thanks these makers:
+- SWARM, FMTONE and WAVETONE engines (and the resonant voice filter they share, `firmware/src/rsvf.c`): ported from [Mini-Tone](https://github.com/eldontyrellcorp/Mini-Tone), a Felucca fork, by eldontyrellcorp and Stephane Schmitz ([GPL-3.0-only](LICENSE))
+- DRUM-X (the DRUM engine's sound: `firmware/src/drumx_voice.c` and its nine factory kits): ported from [JIANT](https://github.com/juanjiant-bit/JIANT), a Felucca fork, by Juan Ignacio Antonucci ([GPL-3.0-only](LICENSE)); after the idea of Sonic Charge's Microtonic
