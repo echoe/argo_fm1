@@ -1,3 +1,7 @@
+# Argo licensing
+
+As Argo is built with multiple GPL-3.0-only parts in its codebase, it is also under the GPL-3.0-only license. What follows is a further explanation of that license and Felucca's specific licensing, as it is also Argo's.
+
 # Felucca licensing
 
 Felucca is free software, licensed under the GNU General Public License, version 3 only
@@ -49,7 +53,7 @@ You may use, study, change and share Felucca under the GPL. If you distribute Fe
 firmware derived from it, you must also give your recipients its complete corresponding
 source under the same licence. That includes devices that ship with modified Felucca inside.
 
-## Hügelton Instruments' own work
+## Hügelton Instruments' work
 
 All by Hügelton Instruments (Leo Kuroshita), in this tree:
 
@@ -104,7 +108,7 @@ Every distribution of a package carries the licence texts with it: the release f
 
 ## No vendor material
 
-No M-VAVE material is part of Felucca. The firmware links no vendor code and contains no vendor
+No M-VAVE material is part of Felucca, and therefore Argo. The firmware links no vendor code and contains no vendor
 data, and the packages hold only Felucca and the three SDK files above. The installer's
 "Return to official V15" holds only the official file's size and SHA-256: you select the
 official firmware file you downloaded yourself, and it is checked and installed in your browser,
@@ -112,16 +116,15 @@ never uploaded or redistributed.
 
 ## Contributions
 
-Contributions are welcome under GPL-3.0-only. Changes to the six engines and the code they
-share (`firmware/engines/`) go to the Felucca-Engines repository, under the MIT licence.
+Contributions are welcome under GPL-3.0-only.
 
 ## Trademarks
 
+"Argo" is not trademarked, it's a name made up by echoe, the person who created this repository.
+
 "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments.
 
-"M-VAVE" and "FM-1" are trademarks of their respective owners. Felucca is independent
-firmware that runs on FM-1 hardware. It is not affiliated with, endorsed by or supported
-by those owners.
+"M-VAVE" and "FM-1" are trademarks of their respective owners.
 
 ## Radio
 

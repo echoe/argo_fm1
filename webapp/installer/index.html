@@ -233,7 +233,7 @@ class Package {
     this.dec = dec;
   }
 
-  // the new app, padded to the stock size (Felucca never changes the layout)
+  // the new app, padded to the stock size (Argo never changes the layout)
   setApp(app) {
     if (app.length > this.app.size) throw new Error(`app is ${app.length} B, the slot is ${this.app.size} B`);
     const nw = new Uint8Array(this.app.size).fill(0xFF);
@@ -319,7 +319,7 @@ async function buildFeluccaPackage(stockBytes, appBytes, product) {
 //
 // The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
 // Step 1: the running firmware (official
-// or Felucca) reads parts of the package and stages the update loader. Step 2:
+// or Felucca branch, including Argo) reads parts of the package and stages the update loader. Step 2:
 // the loader reads the whole image and writes it. Both steps are "the device
 // asks, we answer": cmd 0x30 read requests on the logical image.
 
@@ -611,7 +611,7 @@ function readBackup(file) {
   if (typeof file === "string") file = JSON.parse(file);
   const ids = file && Array.isArray(file.objects) ? idsOf(file.objects.length) : null;
   if (!file || file.format !== "felucca-backup" || file.version !== 1 || !ids)
-    throw new Error("Not a complete Felucca backup");
+    throw new Error("Not a complete Argo backup");
   const objects = file.objects.map((o, i) => {
     if (!o || o.id !== ids[i] || !Number.isInteger(o.size) || o.size < 0 || o.size > (o.id >= 32 ? 81920 : 3840) ||
         !Number.isInteger(o.crc) || o.crc < 0 || o.crc > 0xffffffff || typeof o.data !== "string" ||
@@ -801,7 +801,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.8.3", "product": "FM-1_918", "pkg": "../../firmware/argo-1.8.3.fwsc"};
+const meta = {"version": "1.8.3", "product": "FM-1_050", "pkg": "../../firmware/argo-1.8.3.fwsc"};
 
 let writing = false, stock = null, stockFileEpoch = 0;
 const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
