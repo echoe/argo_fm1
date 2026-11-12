@@ -174,7 +174,7 @@ export class Package {
     this.dec = dec;
   }
 
-  // the new app, padded to the stock size (Felucca never changes the layout)
+  // the new app, padded to the stock size (Argo never changes the layout)
   setApp(app) {
     if (app.length > this.app.size) throw new Error(`app is ${app.length} B, the slot is ${this.app.size} B`);
     const nw = new Uint8Array(this.app.size).fill(0xFF);
