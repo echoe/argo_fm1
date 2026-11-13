@@ -79,7 +79,7 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
  * firmest lean for full pressure .. 10 the lightest */
 static const char *const N_ATSNS[] = {"OFF", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", FELUCCA_SAMPLE ? "SAMPLE" : "-", "VOICE", "TRIO", "WHEEL",
-                                             FELUCCA_GRAIN ? "GRAIN" : "-", "PHYS", "DRUM", "NOISE", "FM6",
+                                             FELUCCA_GRAIN ? "GRAIN" : "-", "PHYS", "DRUM", "LEAD", "FM6",
                                              FELUCCA_SLICE ? "SLICE" : "-",   /* ("-": a retired engine's number, ENG_FM4_GONE) */
 #if FELUCCA_SHDRUM
                                              "SHDRUM",
@@ -260,6 +260,8 @@ static const param_desc_t *eng_xdesc(uint32_t e, uint32_t id)
 {
     if (id < P_FM1_ATK || id > P_FM4_LEVEL)
         return 0;
+    if (e == ENGI_LEAD)
+        return lead_xdesc(id);
 #if FELUCCA_SWARM
     if (e == ENGI_SWARM)
         return swm_xdesc(id);
@@ -571,6 +573,11 @@ static const page_t PAGES[] = {
     {"SK TUNE 2", FAM_EDIT, SC_TRACK, GR_NONE, {SKP_TUN0 + 4, SKP_TUN0 + 5, SKP_TUN0 + 6, SKP_TUN0 + 7}},
     {"SK KIT", FAM_EDIT, SC_TRACK, GR_NONE, {SKP_DPT, SKP_SWP, SKP_CRS, SKP_FLD}},
 #endif
+    /* LEAD's (eng_lead.c): the second oscillator and the sub, the filter, the mod envelope: operator slots under its own names (lead_xdesc) */
+    {"MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_E4, P_E5, P_FM2_SUS, 0xFF}, ENGI_LEAD + 1},                    /* MIX XMOD SAT (EDIT 2 is hidden for LEAD: ui.c page_visible) */
+    {"OSC 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}, ENGI_LEAD + 1},
+    {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM2_ATK, P_E6, P_E7, P_FM2_DEC}, ENGI_LEAD + 1},             /* FTYP CUT RES KEY, as ANALOG's: TYPE CUT RES KTR */
+    {"MOD ENV", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}, ENGI_LEAD + 1},
 #if FELUCCA_SWARM
     /* SWARM's (eng_swarm.c, ported from Mini-Tone): the resonant voice filter: TYPE, CUT (EDIT 2's), RES and KEY (FM operator slots) */
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E7, P_FM1_REL, P_FM1_ATK}, ENGI_SWARM + 1},

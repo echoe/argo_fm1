@@ -18,7 +18,8 @@ static const menu_credit_t MENU_CREDITS[] = {
     {"H\xFCgelton Instruments", MC_TITLE},  /* Felucca's own: above; these are ours too */
     {"Leo Kuroshita", MC_TEXT},
     {"The DRUM engine: GPL-3.0", MC_TEXT},
-    {"Felucca-Engines (ANALOG LOFI TRIO WHEEL NOISE PHASE): MIT", MC_TEXT},
+    {"Felucca-Engines (ANALOG LOFI TRIO WHEEL PHASE): MIT", MC_TEXT},
+    {"LEAD: after Synth2 (MIT)", MC_TEXT},
     {"Fukiai icon font: MIT", MC_TEXT},
     {"https://github.com/hugelton", MC_URL},
     {"", MC_TEXT},

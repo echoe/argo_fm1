@@ -19,7 +19,7 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 - Build: [BUILDING.md](BUILDING.md)
 - Related projects that this uses:
 - - [Felucca](https://github.com/hugelton/Felucca) (Where it all began, this firmware would not exist at all without it. I literally make releases in sync with the Felucca versions ... when I can/care.)
-- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained)
+- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained. Argo builds all but NOISE)
 - - [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
 - - [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
 - - [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
@@ -154,17 +154,25 @@ Packs are what the black keys do and the strum speed together: six are built in 
 OCT+ saves what the black keys do into the user pack you pick.
 The packs and the keys' setting are saved with the music (project SAVE, RESTORE LAST) in the sequence bank's flash.
 
-## Five new synth engines; one unique to this firmware, four from other firmwares
+## Six new synth engines; two unique to this firmware, four from other firmwares
 
 The synths in common with Felucca are:
 
-- ANALOG, FM6, PHASE, LOFI, VOCAL, TRIO, WHEEL, PHYS, NOISE: default Felucca synths.
+- ANALOG, FM6, PHASE, LOFI, VOCAL, TRIO, WHEEL, PHYS: default Felucca synths. (Felucca's NOISE engine is no longer built into Argo: LEAD took its engine slot, 11.)
 
 Synths from other firmwares are:
 - SWARM, FM-TONE, WAVETONE: Engines from the Mini-tone firmware, modeled after the Digitone II's synth engines.
 - DRUM-X: A drum engine from the Jiant firmware, modeled after Microtonic.
 
-The unique synth in this firmware is:
+The unique synths in this firmware are:
+- LEAD: a two-oscillator subtractive lead / bass / pad synth. Its architecture and behaviour follow what the open-source synth [Synth2](https://github.com/chab/oxo_synth2) (MIT) documents and measured; no code is shared. It replaces NOISE in engine slot 11: a preset or project saved with NOISE loads as LEAD with the old values, so re-save those. 32 factory sounds (6 leads, 7 basses, 7 pads, 4 keys, 3 plucks, 5 fx). The controls:
+  * EDIT 1 (OSC): WAV1 (OSC 1: SIN SAW PLS TRI), WAV2 (OSC 2: SAW PLS TRI NOIS), PTCH (OSC 2 pitch, -24..+24 semitones), DETN (OSC 2 detune, -50..+50 cents).
+  * MIX page: MIX (OSC 1 to OSC 2), XMOD (OFF, SYNC, RING, S+R), SAT (saturation).
+  * OSC 2 page: FM (OSC 2 to OSC 1 phase modulation, the curve Synth2 measured), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: SIN TRI SAW SQR), KTRK (OSC 2 key tracking; OFF is a fixed 220 Hz).
+  * FILTER page: FTYP (LP12, LP24, HP12, BP12, LPDL: the diode ladder is an approximation), CUT, RES, KEY (key tracking).
+  * MOD ENV page: MAMT (-64..+63; 0 is off), MATK, MDEC, MDST (the envelope moves OSC 2's pitch by up to 60 semitones, the FM depth or the pulse width).
+  * Pulse width is the track's SHP; the amp and filter envelopes, LFOs, UNISON and glide are the track's as for every engine.
+  * Not in this version: OSC 1 detune copies (UNISON on the track does that), the filter's velocity switch, and Synth2's exact saturation curve.
 - SH-TONE: A drum engine unique to this firmware, loosely modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
   - Two oscillators that can be either SIN, TRI, SAW, SQR, or NOISE.
   - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH AMT.

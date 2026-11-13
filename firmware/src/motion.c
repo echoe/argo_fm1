@@ -468,6 +468,7 @@ static void motion_pset_apply(track_t *t, int32_t pv)
 #endif
     fmt_track_loaded(t);
     swm_track_loaded(t);
+    lead_track_loaded(t);
     wvt_track_loaded(t);
     t->preset = keep;
     for (i = 0; i < P_COUNT; i++)                     /* what it wrote is locked: the next step restores it (motion_unlock) */

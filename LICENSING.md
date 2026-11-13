@@ -28,7 +28,7 @@ with `FELUCCA_ADPCM=1`, not by default). The firmware built with them is GPL-3.0
 Six engines and the code they share are under the MIT licence, not the GPL. They are
 Hügelton Instruments' own work and live in their own repository, Felucca-Engines
 (<https://github.com/hugelton/Felucca-Engines>), included here as the git submodule
-`firmware/engines/`: the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (`eng_analog.c`,
+`firmware/engines/`: the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (Argo does not build NOISE: LEAD, below, replaced it) (`eng_analog.c`,
 `eng_lofi.c`, `eng_trio.c`, `eng_wheel.c`, `eng_noise.c`, `eng_phase.c`), the engine interface
 (`felucca_engine.h`), the shared DSP helpers (`dsp.c`) and the generator of their tables
 (`SPDX-License-Identifier: MIT`, `firmware/engines/LICENSE`, also
@@ -129,3 +129,7 @@ Contributions are welcome under GPL-3.0-only.
 ## Radio
 
 Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
+
+## LEAD
+
+`firmware/src/eng_lead.c` is original code under GPL-3.0-only like the rest of `firmware/src/`. Its design follows the architecture and the behaviour that [Synth2](https://github.com/chab/oxo_synth2) (MIT, Chab / Oxo Music) documents and measured; none of its code is included, so no further licence applies, and Synth2 is credited in CREDITS.md as a courtesy.

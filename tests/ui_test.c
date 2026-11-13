@@ -5140,7 +5140,7 @@ static int test_fm4_retired(void)
 #if FELUCCA_GRAIN
                                             "GRAIN",
 #endif
-                                            "PHYS", "NOISE",
+                                            "PHYS", "LEAD",
 #if FELUCCA_SLICE
                                             "SLICE",
 #endif
@@ -5172,7 +5172,7 @@ static int test_fm4_retired(void)
             last = e;
             r++;
         }
-        bad += check("engines shown ANALOG FM6 PHASE ... NOISE SLICE DRUM SHDRUM SWARM FMTONE WAVETONE (ENGINE_ORDER); PRESETS lists them so",
+        bad += check("engines shown ANALOG FM6 PHASE ... LEAD SLICE DRUM SHDRUM SWARM FMTONE WAVETONE (ENGINE_ORDER); PRESETS lists them so",
                      ok && r == NENG_SHOWN);
     }
     /* a user preset stored with engine 1: kept as it is, it loads as FM6 with the converted patch */
@@ -9628,6 +9628,41 @@ static int test_seq_end_knob(void)
     return bad;
 }
 
+/* LEAD's pages: EDIT 1, MIX (MIX XMOD SAT), OSC 2, FILTER (FTYP CUT RES KEY), MOD ENV; no EDIT 2 (its E4..E7 are on MIX and FILTER) */
+static int test_lead_pages(void)
+{
+    int ok = 1, saw_mix = 0, saw_filter = 0, saw_edit2 = 0, saw_edit1 = 0, saw_osc2 = 0, saw_menv = 0, other_edit2 = 0;
+    uint32_t i, e;
+    ui_power_on();
+    TSEL->eng_req = ENGI_LEAD;
+    for (i = 0; i < NPAGES; i++) {
+        const page_t *pg = &PAGES[i];
+        if (pg->fam != FAM_EDIT || !page_visible(i))
+            continue;
+        saw_edit1 |= str_eq(pg->title, "EDIT 1");
+        saw_osc2 |= str_eq(pg->title, "OSC 2");
+        saw_menv |= str_eq(pg->title, "MOD ENV");
+        if (str_eq(pg->title, "EDIT 2"))
+            saw_edit2 = 1;
+        if (str_eq(pg->title, "MIX"))
+            saw_mix = pg->id[0] == P_E4 && pg->id[1] == P_E5 && pg->id[2] == P_FM2_SUS;
+        if (str_eq(pg->title, "FILTER"))
+            saw_filter = pg->id[0] == P_FM2_ATK && pg->id[1] == P_E6 && pg->id[2] == P_E7 && pg->id[3] == P_FM2_DEC;
+    }
+    ok = saw_mix && saw_filter && saw_edit1 && saw_osc2 && saw_menv && !saw_edit2;
+    for (e = 0; e < NENGINES; e++) {                      /* every other engine keeps its EDIT 2 */
+        if (e == ENGI_LEAD || ENGINES[e]->name[0] == '-')
+            continue;
+        TSEL->eng_req = e;
+        for (i = 0; i < NPAGES; i++)
+            if (str_eq(PAGES[i].title, "EDIT 2") && page_visible(i))
+                other_edit2++;
+    }
+    ok &= other_edit2 > 5;
+    if (!ok) printf("  lead pages: mix %d filter %d edit2 %d other_edit2 %d\n", saw_mix, saw_filter, saw_edit2, other_edit2);
+    return check("LEAD: pages EDIT 1, MIX (MIX XMOD SAT), OSC 2, FILTER (FTYP CUT RES KEY), MOD ENV; no EDIT 2; the other engines keep theirs", ok);
+}
+
 static int test_help(void)
 {
     int bad = 0, ok;
@@ -10451,6 +10486,7 @@ int main(void)
     bad += test_fm6_foot_name();
     bad += test_home_tracks();
     bad += test_fx_map_columns();
+    bad += test_lead_pages();
     bad += test_help();
     bad += test_seq_end_knob();
     bad += test_no_flash();

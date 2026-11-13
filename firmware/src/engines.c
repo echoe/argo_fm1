@@ -25,7 +25,7 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #define ENG_MEM(p) ((void *)eng_mem[p].b)  /* part p's region (p < NPART) */
 #define ENG_MEM_FITS(name, size) _Static_assert((size) <= ENG_MEM_PART, name " state over ENG_MEM_PART")
 
-#include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
+#include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL (NOISE is replaced by SYN1) */
 #include "../engines/src/eng_phase.c"   /* Felucca-Engines (MIT): PHASE */
 #include "../engines/src/eng_lofi.c"
 #if FELUCCA_SAMPLE
@@ -41,7 +41,7 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #endif
 #include "eng_phys.c"           /* PHYS: DaisySP physical models (phys_dsp.c, MIT) */
 #include "eng_drum.c"           /* DRUM: the 8-lane kit (drum_voice.c) */
-#include "../engines/src/eng_noise.c"
+#include "eng_lead.c"           /* LEAD: a two-oscillator subtractive voice (replaces NOISE in slot 11) */
 #include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0) */
 #include "fm4_convert.c"        /* DIGITAL's tables, and its sounds -> FM6 */
 #if FELUCCA_FM4
@@ -97,7 +97,7 @@ static const engine_t *const ENGINES[NENGINES] = {
 #endif
     &ENG_PHYS,                   /* 9 (ENGI_PHYS) */
     &ENG_DRUM,                   /* 10 (ENGI_DRUM) */
-    &ENG_NOISE,                  /* 11 */
+    &ENG_LEAD,                   /* 11 (was NOISE) */
     &ENG_FM6,                    /* 12 (ENGI_FM6) */
 #if FELUCCA_SLICE
     &ENG_SLICE,                  /* 13 */
@@ -195,7 +195,7 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     8,                           /* GRAIN */
 #endif
     9,                           /* PHYS */
-    11,                          /* NOISE */
+    11,                          /* LEAD */
 #if FELUCCA_SLICE
     13,                          /* SLICE */
 #endif

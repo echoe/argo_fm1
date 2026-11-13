@@ -8,7 +8,7 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
 - **[Hügelton Instruments](https://hugelton.com)** (Leo Kuroshita, [@kurogedelic](https://github.com/kurogedelic)):
   Felucca itself; the DRUM voices and kits; the Hügelton Sample
   Pack (the drum samples, CC0 1.0); the [Fukiai](https://github.com/hugelton/Fukiai) icon
-  font ([MIT](LICENSES/MIT-Fukiai.txt)); the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines
+  font ([MIT](LICENSES/MIT-Fukiai.txt)); the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (Argo builds all but NOISE)
   ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines), [MIT](LICENSES/MIT-Felucca-Engines.txt))
 - Font: [Inter Tight](https://github.com/rsms/inter-tight) by The Inter Project Authors, [SIL OFL 1.1](LICENSES/OFL-InterTight.txt)
 - Samples: [Versilian Studios](https://versilian-studios.com/) [VSCO-2 Community Edition](https://github.com/sgossner/VSCO-2-CE) and [VCSL](https://github.com/sgossner/VCSL), CC0 1.0: the SAMPLE sets, also SLICE's PIANO and PIANO HD ([attribution](assets/samples-cc0/ATTRIBUTION.txt))
@@ -37,3 +37,5 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
 Argo also separately thanks these makers:
 - SWARM, FMTONE and WAVETONE engines (and the resonant voice filter they share, `firmware/src/rsvf.c`): ported from [Mini-Tone](https://github.com/eldontyrellcorp/Mini-Tone), a Felucca fork, by eldontyrellcorp and Stephane Schmitz ([GPL-3.0-only](LICENSE))
 - DRUM-X (the DRUM engine's sound: `firmware/src/drumx_voice.c` and its nine factory kits): ported from [JIANT](https://github.com/juanjiant-bit/JIANT), a Felucca fork, by Juan Ignacio Antonucci ([GPL-3.0-only](LICENSE)); after the idea of Sonic Charge's Microtonic
+
+- LEAD (`firmware/src/eng_lead.c`, GPL-3.0-only): follows the architecture and the measured behaviour documented by Synth2 by Chab / Oxo Music (<https://github.com/chab/oxo_synth2>, MIT). It uses no Synth2 code.

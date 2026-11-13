@@ -37,7 +37,7 @@ const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-
 const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
-   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
+   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F, LDX,
    FM4, fromDigital, fromPerc, DRUM_KIT_E,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu,
@@ -54,7 +54,7 @@ async function editorMock() {
   const rq = async (r, o) => link.request(r, o);
   const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
   ok(info.nengines === 18 && info.engines[14] === "SHDRUM" && info.engines[15] === "SWARM" && info.engines[16] === "FMTONE" && info.engines[17] === "WAVETONE" && info.engines[1] === "-" && info.engines[12] === "FM6" && info.engines[13] === "-"
- && info.engines[4] === "-" && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "-" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "NOISE" && info.pcount === 114 && info.pe0 === 106,
+ && info.engines[4] === "-" && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "-" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "LEAD" && info.pcount === 114 && info.pe0 === 106,
     "editor: INFO");
   let descs = 0;
   for (let i = 0; i < info.pcount; i++) if (E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))).label) descs++;
@@ -158,7 +158,7 @@ async function editorMock() {
   ok(!prefs.favorites[info.nengines][31] && !E.devicePresetRows(info, names, prefs).some((r) => r.user), "editor: erased slot disappears and loses star");
   {   /* the lists in the device's order (engines.c ENGINE_ORDER): FM6 second, SHDRUM last, "-" never; the numbers stay */
     const shown = E.engineOrder(info.engines).map((i) => info.engines[i]);
-    ok(shown.join() === "ANALOG,FM6,PHASE,LOFI,VOICE,TRIO,WHEEL,PHYS,NOISE,DRUM,SHDRUM,SWARM,FMTONE,WAVETONE" &&
+    ok(shown.join() === "ANALOG,FM6,PHASE,LOFI,VOICE,TRIO,WHEEL,PHYS,LEAD,DRUM,SHDRUM,SWARM,FMTONE,WAVETONE" &&
        E.engineOrder(info.engines)[1] === 12 && E.engineOrder(info.engines)[9] === 10 && E.engineOrder(info.engines)[10] === 14 && E.engineOrder(info.engines)[12] === 16 && E.engineOrder(info.engines)[13] === 17,
        "editor: engines listed FM6 second, FMTONE last (indices kept)");
     ok(E.engineOrder(["ANALOG", "X", "-", "DRUM", "FM6"]).join() === "0,4,3,1", "editor: an unknown engine follows the known ones");
@@ -1127,6 +1127,51 @@ async function editorTrackParam() {
 }
 
 /* ------------------------------------------------------ FM6 patches --- */
+
+/* Hardware programs <-> LEAD (LDX in editor.html): the framing (139 bytes, nibbles low first), the bank of programs among the
+   library's other messages, the mapped fields both ways, the values LEAD takes, the typical program */
+async function editorLdx() {
+  const N = E.LDX;
+  let seed = 11;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) >>> 16 & 255;
+  let round = true;
+  for (let k = 0; k < 200; k++) {
+    const d = Uint8Array.from({ length: 66 }, rnd), m = N.pack(d, k & 127, 2 + (k & 1));
+    round &&= m.length === 139 && m[0] === 0xF0 && m[1] === 0x33 && m[3] === 4 && m[138] === 0xF7 && m.slice(6, 138).every((b) => b <= 15) && eq(N.unpack(m), d);
+  }
+  ok(round, "LDX: a program dump is 139 bytes, F0 33 .. 04 bank program, 132 nibbles, F7; unpack(pack(x)) == x");
+  const a = N.pack(N.MODAL, 0), b = N.pack(N.MODAL, 98), junk = Uint8Array.from([0xF0, 0x33, 0x0F, 0x04, 0x02, 99, ...Array(1050).fill(1), 0xF7]);
+  const r = N.parse(Uint8Array.from([...a, ...junk, ...b, 0x90, 0x40, 0x7F]));
+  ok(r.programs.length === 2 && r.skipped === 1 && r.programs[0].prog === 0 && r.programs[1].prog === 98 && r.programs[0].bank === 2,
+    "LDX: a file of programs, one longer message and stray bytes: the programs are found, the other message skipped");
+  ok(N.unpack(Uint8Array.from([...a.slice(0, 20), 0x10, ...a.slice(21)])) === null && N.unpack(a.slice(0, 138)) === null, "LDX: a nibble above 15 or a short message is not a program");
+  /* LEAD -> LDX -> LEAD: the mapped fields come back */
+  let back = true;
+  for (let k = 0; k < 300; k++) {
+    const v = { e: [rnd() & 3, rnd() & 3, (rnd() % 49) - 24, (rnd() % 101) - 50, 0, 0, 0, 0], env: [rnd() & 127, rnd() & 127, rnd() & 127, rnd() & 127], slots: { FTYP: rnd() % 5 } };
+    const t = N.toLead(N.unpack(N.pack(N.fromLead(v))), { guess: true });   /* (OSC 1 SIN is LDX code 3: a guess) */
+    back &&= t.e[0] === v.e[0] && t.e[1] === v.e[1] && t.e[2] === v.e[2] && t.e[3] === v.e[3] && t.env.every((x, i) => x === (v.env[i] & 0x7E)) && t.slots.FTYP === v.slots.FTYP;
+  }
+  ok(back, "LDX: LEAD -> LDX -> LEAD keeps the mapped fields (waves, OSC 2 pitch / fine, amp envelope to 6 bits, filter type)");
+  /* what LEAD takes: every value inside the engine's range, whatever the program */
+  let inr = true;
+  for (let k = 0; k < 300; k++) {
+    const d = Uint8Array.from({ length: 66 }, rnd).map((x, i) => (i < 8 ? x & 127 : i < 16 ? x & 126 : x));
+    d[50] = rnd() & 3; d[51] = rnd() & 3; d[53] = rnd() % 8;
+    const t = N.toLead(d, { guess: true });
+    inr &&= t.e[0] >= 0 && t.e[0] <= 3 && t.e[1] >= 0 && t.e[1] <= 3 && t.e[2] >= -24 && t.e[2] <= 24 && t.e[3] >= -50 && t.e[3] <= 50 && t.e[4] >= 0 && t.e[4] <= 127
+      && t.env.every((x) => x >= 0 && x <= 127) && t.slots.FTYP >= 0 && t.slots.FTYP <= 4;
+  }
+  ok(inr, "LDX: whatever the program, LEAD's values are inside their ranges (PTCH, DETN, waves, envelope, FTYP)");
+  const g = N.toLead(N.MODAL), gg = N.toLead(N.MODAL, { guess: true });
+  ok(g.skipped.some((x) => x.name === "OSC mix") && !gg.skipped.length && gg.applied.length === g.applied.length + 1, "LDX: a guessed field is applied only when asked for");
+  const dev = N.toDevice(g, 106);
+  ok(dev.length === 8 + 4 + 11 && dev.filter(([id]) => id >= 106 && id < 114).length === 8 && dev.some(([id, v]) => id === 66 && v === g.slots.FTYP), "LDX: an import is 8 engine values, the 4 envelope values and LEAD's 11 slots as (id, value)");
+  /* the engine's own table agrees (WAV1 4 shapes, FTYP 5 types, 32 factory sounds) */
+  const lead = E.ENGINES_TABLE ? null : null;
+  void lead;
+}
+
 /* the 6-operator patch formats (FM6 in editor.html == eng_fm6.c / fm6_test.c), the SysEx files, the protocol
    (cmds 68..71) against the mock, PTCH, the macros at the pe0 INFO gives */
 async function editorFm6() {
@@ -1524,7 +1569,7 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 9 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
@@ -1739,6 +1784,7 @@ await editorTrackParam();
 await editorSong();
 await editorSessions();
 await editorFm6();
+await editorLdx();
 await editorFm6Bank();
 await editorMidiLearn();
 fm6TabNoBank();

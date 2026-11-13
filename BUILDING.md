@@ -120,7 +120,7 @@ Runs the firmware's host-side unit and regression tests and, with Node.js, the i
 user presets, projects of every format, backup, the keys and knobs, MIDI (USB, TRS, clock,
 control), USB audio, the update entry and loader, the command-line installer, the UI (the real
 drawing code against stubs: every screen in every palette is rendered and checked for clipped or
-overlapping text; PNGs land in `build/ui_new/`), every engine (DRUM, NOISE, PHYS, FM6, SLICE, the
+overlapping text; PNGs land in `build/ui_new/`), every engine (DRUM, LEAD, PHYS, FM6, SLICE, the
 DIGITAL conversion), the chord keys, the modulation matrix, the FX layer, the reverbs, the SLICER
 and swing. With `DAISYSP` pointing at a DaisySP checkout, the PHYS models are also compared with
 their floating-point originals; without it that test is skipped. Likewise with `SNES_SPC` pointing at a
