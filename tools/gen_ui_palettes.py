@@ -41,6 +41,8 @@ from pathlib import Path
 # name, color1, color2, color3, primary, secondary (8-bit RGB; stored as RGB565)
 RED, RED_LIGHT = (255, 72, 72), (190, 24, 40)
 PALETTES = [
+    # Default Argo theme for this fork.
+    ("ARGO",   (20, 12, 14),    (250, 130, 110), (252, 236, 232), RED,       (96, 214, 230)),
     ("GREY",   (14, 14, 14),    (180, 180, 180), (232, 232, 232), RED,       (72, 140, 255)),
     ("GREEN",  (6, 18, 10),     (84, 214, 120),  (226, 244, 230), RED,       (255, 214, 92)),
     ("AMBER",  (18, 14, 8),     (255, 168, 40),  (246, 236, 216), RED,       (96, 214, 230)),
