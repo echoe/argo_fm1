@@ -68,8 +68,8 @@ Argo is built off of Felucca, just with a few tweaks. The 'selling point' featur
 - Patch swapping per step [only within the same synth engine].
 - A generative sequencer.
 - Greatly expanded and playable chord modes.
-- Different synth engines.
-- Various effects tweaks and other tweaks.
+- Different synth engines either from other firmware, or new, based off of the Nord Lead 2 and SH4d rhythm engine.
+- Added tweaks to effects and general usage.
 - No samples.
 
 Pictures of the new features, which may be worth a thousand words:
@@ -165,14 +165,13 @@ Synths from other firmwares are:
 - DRUM-X: A drum engine from the Jiant firmware, modeled after Microtonic.
 
 The unique synths in this firmware are:
-- LEAD: a two-oscillator subtractive lead / bass / pad synth. Its architecture and behaviour follow what the open-source synth [Synth2](https://github.com/chab/oxo_synth2) (MIT) documents and measured; no code is shared. It replaces NOISE in engine slot 11: a preset or project saved with NOISE loads as LEAD with the old values, so re-save those. 32 factory sounds (6 leads, 7 basses, 7 pads, 4 keys, 3 plucks, 5 fx). The controls:
-  * EDIT 1 (OSC): WAV1 (OSC 1: SIN SAW PLS TRI), WAV2 (OSC 2: SAW PLS TRI NOIS), PTCH (OSC 2 pitch, -24..+24 semitones), DETN (OSC 2 detune, -50..+50 cents).
-  * MIX page: MIX (OSC 1 to OSC 2), XMOD (OFF, SYNC, RING, S+R), SAT (saturation).
-  * OSC 2 page: FM (OSC 2 to OSC 1 phase modulation, the curve Synth2 measured), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: SIN TRI SAW SQR), KTRK (OSC 2 key tracking; OFF is a fixed 220 Hz).
-  * FILTER page: FTYP (LP12, LP24, HP12, BP12, LPDL: the diode ladder is an approximation), CUT, RES, KEY (key tracking).
-  * MOD ENV page: MAMT (-64..+63; 0 is off), MATK, MDEC, MDST (the envelope moves OSC 2's pitch by up to 60 semitones, the FM depth or the pulse width).
-  * Pulse width is the track's SHP; the amp and filter envelopes, LFOs, UNISON and glide are the track's as for every engine.
-  * Not in this version: OSC 1 detune copies (UNISON on the track does that), the filter's velocity switch, and Synth2's exact saturation curve.
+- LEAD: a two-oscillator subtractive synth loosely based off of Synth2's open-source reconstruction of the Nord Lead. The controls:
+  - Two oscillators. The first one has Sine, Saw, Pulse, and Triangle; the second one drops Sine and adds Noise. Adjust pitch and detune as well.
+  - Mix amount (from osc1 to osc2), Modulation (sync, ring, or both), and filter saturation.
+  - FM amount (OSC 2 to OSC 1 phase modulation), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: Sine, Tri, Saw, Square), Keytrack (OSC 2 key tracking).
+  - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
+  - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
+  - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
 - SH-TONE: A drum engine unique to this firmware, loosely modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
   - Two oscillators that can be either SIN, TRI, SAW, SQR, or NOISE.
   - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH AMT.
@@ -182,6 +181,10 @@ The unique synths in this firmware are:
   - An ending LP/BP/HP filter.
 
 ## Other non-effects changes
+
+### Argo theme
+
+There's a new theme just for this fork :) It's just salmon-colored.
 
 ### SELECT is set to PAGE by default
 
@@ -208,6 +211,5 @@ The keys still play notes so watch out if you're doing it live :)
 
 We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
 
-## Todo
-
-Nothing for now. If we want more things in the future, I'm looking at removing patterns (the ones in the save menu) - but they're so built into everything that it's not worth removing them at this time.
+## That's it!
+If you have any requests or suggestions, please feel free!
