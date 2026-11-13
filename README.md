@@ -17,12 +17,13 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 - Install Argo: [web installer](https://echoe.github.io/argo_fm1/)
 - Edit (upload patches, edit fm6 patches): [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
 - Build: [BUILDING.md](BUILDING.md)
-- Related projects that this uses:
+- Projects that this firmware uses:
 - - [Felucca](https://github.com/hugelton/Felucca) (Where it all began, this firmware would not exist at all without it. I literally make releases in sync with the Felucca versions ... when I can/care.)
 - - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained. Argo builds all but NOISE)
 - - [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
 - - [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
 - - [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
+- - [Synth2](https://github.com/chab/oxo_synth2) (the code used to build the LEAD engine)
 
 ## Development and support
 
