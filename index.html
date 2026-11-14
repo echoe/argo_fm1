@@ -1,1 +1,62 @@
-<!doctype html><meta charset="utf-8"><title>Argo</title><meta http-equiv="refresh" content="0; url=webapp/installer/"><a href="webapp/installer/">Argo installer</a>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argo</title>
+<meta name="description" content="Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1, built on Felucca.">
+<style>
+  :root { --bg: #fff; --fg: #000; --dim: #777; --line: #ccc; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #888; --line: #444; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #888; --line: #444; color-scheme: dark; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 32px; line-height: 1.1; margin: 0 0 16px; }
+  h2 { font-size: 20px; margin: 2rem 0 .5rem; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 1.4rem 0 .3rem; }
+  a { color: inherit; }
+  code { font-size: .9em; }
+  pre { overflow-x: auto; padding: 8px 12px; border: 1px solid var(--line); }
+  .small { color: var(--dim); font-size: 14px; }
+  .lede { font-size: 18px; margin: 0 0 24px; }
+  .ways { display: grid; gap: 12px; margin: 0 0 24px; }
+  .ways a { display: block; text-decoration: none; border: 1px solid var(--line); padding: 12px 16px; }
+  .ways a:hover, .ways a:focus-visible { border-color: var(--fg); outline: none; }
+  .ways strong { display: block; font-size: 18px; }
+  .ways span { color: var(--dim); font-size: 14px; }
+</style>
+<style>
+.site-top { max-width: 64rem; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1.4rem;
+  padding: 12px 16px; border-bottom: 1px solid var(--line, #888); font: 600 15px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+.site-top .brand { color: var(--fg); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+.site-top nav { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin-left: auto; }
+.site-top nav a { color: var(--dim); text-decoration: none; padding: 2px 0; border-bottom: 2px solid transparent; }
+.site-top nav a:hover, .site-top nav a:focus-visible { color: var(--fg); }
+.site-top nav a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--fg); }
+@media (max-width: 520px) { .site-top nav { margin-left: 0; width: 100%; } }
+</style></head>
+<body><header class="site-top"><a class="brand" href="./" aria-current="page">Argo</a><nav aria-label="Argo"><a href="webapp/installer/">Install</a><a href="webapp/editor/">Editor</a><a href="manual/">Manual</a><a href="https://joakimeriksson.github.io/fm1-emu/?fw=local&amp;mhz=100">Emulator</a><a href="https://github.com/echoe/argo_fm1">Source</a></nav></header>
+<main>
+<h1>Argo</h1>
+<p class="lede">Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1, built on Felucca. It adds eight
+sequences per track that you can swap between live (and chain), a preset swap on any step, a generative arpeggiator,
+playable chord modes and more synth engines. It takes the sampling engines out.</p>
+<nav class="ways" aria-label="Get Argo">
+<a href="webapp/installer/"><strong>Install</strong><span>Connect your FM-1 by USB and install from Chrome or Edge. There is nothing to install on your computer.</span></a>
+<a href="webapp/editor/"><strong>Editor</strong><span>Edit patches and projects, and back up the whole FM-1, from the browser.</span></a>
+<a href="manual/"><strong>Manual</strong><span>The README: what is different from Felucca, and how to use it.</span></a>
+<a href="https://joakimeriksson.github.io/fm1-emu/?fw=local&amp;mhz=100"><strong>Try it in an emulator</strong><span>Joakim Eriksson's FM-1 emulator: load the package you downloaded into it.</span></a>
+<a href="firmware/argo-1.8.4.fwsc"><strong>Download argo-1.8.4.fwsc</strong><span>For the command-line installer: <code>python3 tools/fm1_install.py argo-1.8.4.fwsc</code></span></a>
+<a href="https://github.com/echoe/argo_fm1"><strong>Source</strong><span>On GitHub under GPL-3.0-only.</span></a>
+</nav>
+<p class="small"><b>Version 1.8.4.</b> Installing firmware is at your own risk. The installer can put M-VAVE's own
+firmware back (&ldquo;Return to official V15&rdquo;), and <a href="https://github.com/jvitkauskas/m-bootloader">M-Bootloader</a>
+is worth installing first, so that you can always reflash. Argo is a branch of
+<a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita (H&uuml;gelton Instruments). M-VAVE and FM-1
+are trademarks of their owners; Argo is not affiliated with or endorsed by them.</p>
+</main>
+</body>
+</html>
