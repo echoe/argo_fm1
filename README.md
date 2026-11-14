@@ -5,9 +5,9 @@
 Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1 that is built off of Felucca, removing the samples and adding in different engines.
 
 To install this on the FM-1, first connect the FM-1 to a computer by USB, open the
-[web installer](https://echoe.github.io/argo_fm1/) in Chrome or Edge, and press Install. No extra hardware is needed.
+[web installer](https://echoe.github.io/argo_fm1/webapp/installer) in Chrome or Edge, and press Install. No extra hardware is needed.
 
-You can also try out this firmware by downloading the package and using it with [this web emulator](https://joakimeriksson.github.io/fm1-emu/?fw=local&mhz=100) .
+You can also try out this firmware by downloading the package and using it with [this web emulator](https://joakimeriksson.github.io/fm1-emu/?fw=argo&mhz=100) . This is synced with the latest build that is on the firmware hub.
 
 I've tested this only on my own personal FM-1, so installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** should take you back to stock, or you should be able to flash another firmware after trying out this one.
 You can also install locally using tools/fm1_install.sh. Details on how exactly to do that are in BUILDING.md.
@@ -23,6 +23,7 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 - - [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
 - - [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
 - - [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
+
 - - [Synth2](https://github.com/chab/oxo_synth2) (the code used to build the LEAD engine)
 
 ## Development and support
