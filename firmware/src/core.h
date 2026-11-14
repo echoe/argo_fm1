@@ -171,6 +171,7 @@ static void params_by_count(int16_t *out, const int16_t *in, uint32_t np, const 
 /* engine indices the stores name (engines.c ENGINES[]: append-only) */
 #define ENGI_PHYS 9u
 #define ENGI_DRUM 10u
+#define ENGI_LEAD 11u            /* (eng_lead.c: NOISE's slot) */
 #define ENGI_SHDRUM 14u
 #define ENGI_SWARM 15u           /* (eng_swarm.c, ported from Mini-Tone) */
 #define ENGI_FMTONE 16u          /* (eng_fmtone.c) */

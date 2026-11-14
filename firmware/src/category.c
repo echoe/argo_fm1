@@ -44,7 +44,7 @@ static const char *const PRESET_CAT[18] = {
 #else
     "DDDD",                      /* 10 DRUM: DRUM KIT; 1.5.6: DEEP KIT, TIGHT KIT, PERC KIT */
 #endif
-    "FFFF",                      /* 11 NOISE: WIND, RAIN, ARCADE, METAL */
+    "LLLLLLBBBBBBBPPPPPPPKKKKUUUFFFFF",   /* 11 LEAD: 6 leads, 7 basses, 7 pads, 4 keys, 3 plucks, 5 fx (eng_lead.c LEAD_PRESETS) */
     "KUBLPUKU",                  /* 12 FM6: TINE EP, BELL, FM BASS, BRASS, PAD, MARIMBA, ORGAN, PLUCK */
     "DD",                        /* 13 SLICE: CHOP, STUTTER */
 #if FELUCCA_SHDRUM

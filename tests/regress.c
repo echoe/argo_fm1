@@ -1000,7 +1000,7 @@ static void slug(char *d, const char *s, size_t n)
 }
 
 /* ------------------------------------------------------------- main --- */
-#define MAXJ 512
+#define MAXJ 640           /* (LEAD's 32 presets, 1.9: 512 before) */
 static job_t J[MAXJ];
 static uint32_t nj;
 static job_t *add(uint32_t kind, const char *name)

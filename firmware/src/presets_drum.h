@@ -1,1 +1,1 @@
-#define DRUM_NX 18
+#define DRUM_NX 1

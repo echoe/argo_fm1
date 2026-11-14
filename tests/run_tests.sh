@@ -13,7 +13,7 @@
 #                   (tests/target_budget.txt, +10 %; exact, static).
 #   voices          the budget of 8, steal fades, MONO / LEGATO / UNISON keep their note, the VOICE cap,
 #                   no hanging notes on any MIDI / key routing.
-# FELUCCA-ENGINES (engines/tests, MIT): ANALOG LOFI TRIO WHEEL NOISE PHASE on their own host against their golden renders,
+# FELUCCA-ENGINES (engines/tests, MIT): ANALOG LOFI TRIO WHEEL NOISE PHASE (the vendored set; NOISE is no longer built into Argo, LEAD replaced it) on their own host against their golden renders,
 #                   once with their own tables and once with build/gen's (the two generators agree).
 # ENGINE MEMORY (tests/union_test.c, 1.5): engine switches on a part (every pair and A -> B -> A of the engines that
 #                   share the part's state region, with others), hashed against 1.4's (tests/union_golden.txt).
@@ -164,9 +164,9 @@
 #                   Felucca's targets, the controls' directions, no clipping, DC, retriggers, the hat choke, the
 #                   kick on a small speaker; the DRUM engine (src/eng_drum.c): its key map, the 8 lanes together,
 #                   one hit per lane, the choke between lanes; the cost per voice; demos in build/drum_demo/.
-# NOISE (tests/noise_test.c): the engine (engines/src/eng_noise.c): COLR's slope (white, pink, brown), the filter and the
-#                   register clock following the key, META periodic at the key, no DC, no clipping at the
-#                   corners, a note from silence the same twice, the cost per voice; demos in build/noise_demo/.
+# LEAD (tests/lead_test.c): the engine (src/eng_lead.c, replaces NOISE in slot 11): pitch under each XMOD, SYNC locking the
+#                   period, FM depth, no DC, bounded at every WAV1 x WAV2 x XMOD corner, a note from silence the same twice,
+#                   descriptors.
 # DIGITAL -> FM6 (tests/fm4_test.c, built with FELUCCA_FM4=1): the retired four-operator engine against its conversion
 #                   (src/fm4_convert.c): routes and carriers per algorithm, the presets' PTCH, and the sound (pitch,
 #                   centroid, RMS envelope) of its presets and algorithms; demos in build/fm4_demo/. tests/digital_test.c
@@ -486,9 +486,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/wavetone_project_test" tests/wavetone_project_test.c -lm
     run "WAVETONE: both oscillators, wavetable morph and band limits, PD, SYNC / RING / FM, noise types, filter, 4-voice cap, descriptors, corners, level, cost" "$OUT/wavetone_test"
     run "WAVETONE through the project store: bipolar OFS kept, clamped to its own range" "$OUT/wavetone_project_test"
-    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/noise_test" tests/noise_test.c -lm
-    mkdir -p build/noise_demo
-    run "NOISE: colour slopes, key-tracked filter and clock, META period, DC, clipping, retrigger, cost, demos" "$OUT/noise_test" build/noise_demo
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/lead_test" tests/lead_test.c -lm
+    run "LEAD: pitch under each XMOD, SYNC period, FM depth, DC, bounded corners, retrigger, descriptors" "$OUT/lead_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6_test" tests/fm6_test.c -lm
     mkdir -p build/fm6_demo
     run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, cost, demos" "$OUT/fm6_test" build/fm6_demo

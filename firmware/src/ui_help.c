@@ -33,6 +33,9 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"EDIT 1", H_EDIT},
     {"EDIT 2", H_EDIT},
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},
+    {"MIX", "[K1]OSC 1 / 2[K2]SYNC, RING[K3]SAT[EDIT]OSC 2"},   /* LEAD's pages (EDIT 2 is hidden for it) */
+    {"OSC 2", "[K1]FM[K2]SUB[K3]SHAPE[K4]KEY TRACK[EDIT]FILTER"},
+    {"MOD ENV", "[K1]AMOUNT[K2]ATTACK[K3]DECAY[K4]DEST[EDIT]VOICE"},
 #if FELUCCA_FMTONE
     {"A ENV", "[K1]ATTACK[K2]DECAY[K3]END[K4]LEVEL[EDIT]B ENV"},
     {"B ENV", "[K1]ATTACK[K2]DECAY[K3]END[K4]LEVEL[EDIT]DEL TRK"},

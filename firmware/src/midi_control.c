@@ -221,7 +221,7 @@ static const uint8_t MIDI_CC_MAP[][2] = {
 static const uint8_t MIDI_CC_ENG[NENGINES] = {
     0x56, 0x00, 0x30, 0x80, FELUCCA_SAMPLE ? 0x50 : 0, 0x07, 0x67, 0x00,   /* ANALOG CUT RES, -, PHASE DCW, LOFI TONE, SAMPLE CUT, VOICE Q,
                                                        * TRIO CUT RES, WHEEL - (a retired engine's slot: 0) */
-    FELUCCA_GRAIN ? 0x80 : 0, 0x30, 0x30, 0x34, 0x30, /* GRAIN TONE, PHYS BRIT, DRUM TONE, NOISE FREQ RES, FM6 MLVL */
+    FELUCCA_GRAIN ? 0x80 : 0, 0x30, 0x30, 0x78, 0x30, /* GRAIN TONE, PHYS BRIT, DRUM TONE, LEAD CUT RES, FM6 MLVL */
     FELUCCA_SLICE ? 0x80 : 0,                         /* SLICE TONE */
 #if FELUCCA_SHDRUM
     0x40,                                             /* SHDRUM DPTH (Argo: DRV, the resonance's, is gone) */

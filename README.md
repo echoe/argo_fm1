@@ -17,12 +17,13 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 - Install Argo: [web installer](https://echoe.github.io/argo_fm1/)
 - Edit (upload patches, edit fm6 patches): [web editor](https://echoe.github.io/argo_fm1/webapp/editor/)
 - Build: [BUILDING.md](BUILDING.md)
-- Related projects that this uses:
+- Projects that this firmware uses:
 - - [Felucca](https://github.com/hugelton/Felucca) (Where it all began, this firmware would not exist at all without it. I literally make releases in sync with the Felucca versions ... when I can/care.)
-- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained)
+- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained. Argo builds all but NOISE)
 - - [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
 - - [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
 - - [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
+- - [Synth2](https://github.com/chab/oxo_synth2) (the code used to build the LEAD engine)
 
 ## Development and support
 
@@ -68,8 +69,8 @@ Argo is built off of Felucca, just with a few tweaks. The 'selling point' featur
 - Patch swapping per step [only within the same synth engine].
 - A generative sequencer.
 - Greatly expanded and playable chord modes.
-- Different synth engines.
-- Various effects tweaks and other tweaks.
+- Different synth engines either from other firmware, or new, based off of the Nord Lead 2 and SH4d rhythm engine.
+- Added tweaks to effects and general usage.
 - No samples.
 
 Pictures of the new features, which may be worth a thousand words:
@@ -154,17 +155,24 @@ Packs are what the black keys do and the strum speed together: six are built in 
 OCT+ saves what the black keys do into the user pack you pick.
 The packs and the keys' setting are saved with the music (project SAVE, RESTORE LAST) in the sequence bank's flash.
 
-## Five new synth engines; one unique to this firmware, four from other firmwares
+## Six new synth engines; two unique to this firmware, four from other firmwares
 
 The synths in common with Felucca are:
 
-- ANALOG, FM6, PHASE, LOFI, VOCAL, TRIO, WHEEL, PHYS, NOISE: default Felucca synths.
+- ANALOG, FM6, PHASE, LOFI, VOCAL, TRIO, WHEEL, PHYS: default Felucca synths. (Felucca's NOISE engine is no longer built into Argo: LEAD took its engine slot, 11.)
 
 Synths from other firmwares are:
 - SWARM, FM-TONE, WAVETONE: Engines from the Mini-tone firmware, modeled after the Digitone II's synth engines.
 - DRUM-X: A drum engine from the Jiant firmware, modeled after Microtonic.
 
-The unique synth in this firmware is:
+The unique synths in this firmware are:
+- LEAD: a two-oscillator subtractive synth loosely based off of Synth2's open-source reconstruction of the Nord Lead. The controls:
+  - Two oscillators. The first one has Sine, Saw, Pulse, and Triangle; the second one drops Sine and adds Noise. Adjust pitch and detune as well.
+  - Mix amount (from osc1 to osc2), Modulation (sync, ring, or both), and filter saturation.
+  - FM amount (OSC 2 to OSC 1 phase modulation), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: Sine, Tri, Saw, Square), Keytrack (OSC 2 key tracking).
+  - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
+  - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
+  - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
 - SH-TONE: A drum engine unique to this firmware, loosely modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
   - Two oscillators that can be either SIN, TRI, SAW, SQR, or NOISE.
   - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH AMT.
@@ -174,6 +182,10 @@ The unique synth in this firmware is:
   - An ending LP/BP/HP filter.
 
 ## Other non-effects changes
+
+### Argo theme
+
+There's a new theme just for this fork :) It's just salmon-colored.
 
 ### SELECT is set to PAGE by default
 
@@ -200,6 +212,5 @@ The keys still play notes so watch out if you're doing it live :)
 
 We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
 
-## Todo
-
-Nothing for now. If we want more things in the future, I'm looking at removing patterns (the ones in the save menu) - but they're so built into everything that it's not worth removing them at this time.
+## That's it!
+If you have any requests or suggestions, please feel free!

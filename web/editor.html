@@ -171,6 +171,7 @@
     <nav class="tabs" id="tabs" role="tablist">
       <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
       <button role="tab" data-tab="fm6" data-t="tabFm6" data-ic="ui_knob"></button>
+      <button role="tab" data-tab="lead" data-t="tabLead" data-ic="ui_knob"></button>
       <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
       <button role="tab" data-tab="tracks" data-t="tabTracks" data-ic="ui_slider_vertical"></button>
       <button role="tab" data-tab="library" data-t="library" data-ic="symbol_books"></button>
@@ -224,6 +225,19 @@
     </div>
   </section>
 
+  <section class="panel" id="p-lead" data-tab="lead" data-dev hidden>
+    <p class="dim" data-t="ldxHelp"></p>
+    <div class="group">
+      <h2 data-t="ldxTitle" data-ic="symbol_upload"></h2>
+      <p class="bar"><button id="ldximport" data-t="ldxImport" data-ic="symbol_upload"></button>
+        <input type="file" id="ldxfile" accept=".syx,.SYX,.bin,application/octet-stream" hidden>
+        <label><span data-t="ldxProg"></span> <select id="ldxprog"></select></label>
+        <label><input type="checkbox" id="ldxguess"> <span data-t="ldxGuess"></span></label>
+        <button id="ldxapply" data-t="ldxApply"></button>
+        <button id="ldxexport" data-t="ldxExport" data-ic="symbol_download"></button></p>
+      <pre class="dim" id="ldxreport"></pre>
+    </div>
+  </section>
   <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
     <div class="groups" id="seqgroups"></div>
     <div id="steps">
@@ -1472,6 +1486,112 @@ const FM6 = (() => {
     TARGET: { TRACK: 0, BANK: 1, FACTORY: 2, USER: 3 } };
 })();
 
+/* ------------------------------------------------------------- LEAD patches --- */
+/* Program dumps of the hardware synth LEAD is modeled on, as its factory library's SysEx files have them: F0 33 <ch> 04 <bank>
+   <program>, then the 66 bytes of a program as 132 nibbles (low nibble first), then F7: 139 bytes a program. (The library's
+   1063-byte messages after the 99 programs are not programs: skipped.) The dumps carry no program names.
+   What is known of the 66 bytes comes from reading the 396 factory programs: 0..7 are 7-bit values, 8..15 six-bit values stored
+   <<1 (8..11 and 12..15 two ADSR envelopes, the filter's and the amp's, in the order of Synth2's parameter list), 16 a three-bit
+   one <<4, 17..24 seven-bit, 25..49 mostly zero, 50..65 small selections. Only the fields in FIELDS are mapped, each with how
+   sure the mapping is:
+     confirmed: the values match what the patch names say (HP / BP filter patches, the noise OSC 2 of the noise patches)
+     likely:    the value's range, centre and spread fit (OSC 2 pitch: centre 60, +-60 as Synth2's table; OSC 2 fine: 1 ct a step as
+                Synth2 measured), and so does the way it changes between pad / pluck / organ patches (envelope)
+     guess:     a field of the right kind in the right place, not applied unless asked for
+   Every other byte is not understood and is neither read nor written: an import takes LEAD's defaults for what it does not map,
+   an export writes the typical (most common) value of every unmapped byte of the factory programs (MODAL). The mapping is data
+   (FIELDS), a row each. */
+const LDX = (() => {
+  const LEN = 66, MSG = 139;
+  const hex = (h) => Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16));
+  const MODAL = hex("3c400000000000000000000000647e00007f007a3e370040000000000000000000000000000000000000000000000000000000000001010302000200010300000204");
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  /* LEAD's parameter ids: the FM operator slots (core.h P_FM1_ATK 61 ..; eng_lead.c LDP_*), P_ATK .. P_REL 1..4 */
+  const ID = { FM: 61, SUB: 62, SUBW: 63, KTRK: 64, FTYP: 66, KEY: 67, SAT: 68, MAMT: 71, MATK: 72, MDEC: 73, MDST: 74 };
+  const ENV_ID = [1, 2, 3, 4];
+  /* OSC waves: LDX code -> LEAD (WAV1 SIN SAW PLS TRI, WAV2 SAW PLS TRI NOIS) and back */
+  const W1 = [2, 1, 3, 0], W1_BACK = [3, 1, 0, 2], W2 = [1, 0, 2, 3], W2_BACK = [1, 0, 2, 3];
+  function unpack(m) {                                   /* 139 bytes -> the 66 program bytes, or null */
+    if (m.length !== MSG || m[0] !== 0xF0 || m[1] !== 0x33 || m[3] !== 0x04 || m[MSG - 1] !== 0xF7) return null;
+    const d = new Uint8Array(LEN);
+    for (let k = 0; k < LEN; k++) {
+      const lo = m[6 + 2 * k], hi = m[7 + 2 * k];
+      if (lo > 15 || hi > 15) return null;
+      d[k] = lo | (hi << 4);
+    }
+    return d;
+  }
+  function pack(d, prog = 0, bank = 2, ch = 0x0F) {      /* the 66 bytes -> a program dump */
+    const m = new Uint8Array(MSG);
+    m.set([0xF0, 0x33, ch & 0x7F, 0x04, bank & 0x7F, prog & 0x7F]);
+    for (let k = 0; k < LEN; k++) { m[6 + 2 * k] = d[k] & 15; m[7 + 2 * k] = d[k] >> 4; }
+    m[MSG - 1] = 0xF7;
+    return m;
+  }
+  function parse(u8) {                                   /* a SysEx file -> {programs: [{bank, prog, d}], skipped} */
+    const programs = []; let skipped = 0;
+    for (let i = 0; i < u8.length; i++) {
+      if (u8[i] !== 0xF0) continue;
+      let j = i + 1;
+      while (j < u8.length && u8[j] !== 0xF7) j++;
+      if (j >= u8.length) break;
+      const m = u8.subarray(i, j + 1), d = unpack(m);
+      if (d) programs.push({ bank: m[4], prog: m[5], d }); else skipped++;
+      i = j;
+    }
+    return { programs, skipped };
+  }
+  /* the mapped fields: name, the LDX bytes, how sure. toLead reads d, fromLead writes it */
+  const FIELDS = [
+    { name: "OSC 1 wave", bytes: [50], level: (d) => (d[50] === 3 ? "guess" : "likely") },
+    { name: "OSC 2 wave", bytes: [51], level: (d) => (d[51] === 3 ? "confirmed" : "likely") },
+    { name: "OSC 2 pitch", bytes: [0], level: () => "likely" },
+    { name: "OSC 2 fine", bytes: [1], level: () => "likely" },
+    { name: "OSC mix", bytes: [2], level: () => "guess" },
+    { name: "Amp envelope", bytes: [12, 13, 14, 15], level: () => "likely" },
+    { name: "Filter type", bytes: [53], level: (d) => (d[53] === 2 || d[53] === 3 ? "confirmed" : "likely") },
+  ];
+  function toLead(d, opt = {}) {                          /* 66 bytes -> {e, env, slots, applied, skipped}: LEAD's values */
+    const e = [1, 1, 0, 9, 64, 0, 80, 25], env = [0, 60, 100, 45];
+    const slots = { FM: 0, SUB: 0, SUBW: 1, KTRK: 1, FTYP: 1, KEY: 64, SAT: 0, MAMT: 0, MATK: 0, MDEC: 40, MDST: 0 };
+    const applied = [], skipped = [];
+    for (const f of FIELDS) {
+      const level = f.level(d), from = f.bytes.map((b) => d[b]);
+      if (level === "guess" && !opt.guess) { skipped.push({ name: f.name, level, from }); continue; }
+      let to;
+      switch (f.name) {
+        case "OSC 1 wave": e[0] = to = W1[d[50] & 3]; break;
+        case "OSC 2 wave": e[1] = to = W2[d[51] & 3]; break;
+        case "OSC 2 pitch": e[2] = to = clamp(d[0] - 60, -24, 24); break;
+        case "OSC 2 fine": e[3] = to = clamp(d[1] - 64, -50, 50); break;
+        case "OSC mix": e[4] = to = d[2]; break;
+        case "Amp envelope": for (let k = 0; k < 4; k++) env[k] = d[12 + k] & 0x7E; to = env.join(" "); break;
+        case "Filter type": slots.FTYP = to = Math.min(4, d[53]); break;
+      }
+      applied.push({ name: f.name, level, from, to });
+    }
+    return { e, env, slots, applied, skipped };
+  }
+  /* LEAD's values -> the 66 program bytes (the typical program with the mapped fields set) */
+  function fromLead(v) {
+    const d = Uint8Array.from(MODAL);
+    d[50] = W1_BACK[clamp(v.e[0], 0, 3)]; d[51] = W2_BACK[clamp(v.e[1], 0, 3)];
+    d[0] = clamp(60 + v.e[2], 0, 127); d[1] = clamp(64 + v.e[3], 0, 127);
+    for (let k = 0; k < 4; k++) d[12 + k] = clamp(v.env[k], 0, 127) & 0x7E;
+    d[53] = clamp(v.slots.FTYP, 0, 4);
+    return d;
+  }
+  /* an import as [id, value] pairs for the track (pe0: the first engine parameter id) */
+  function toDevice(r, pe0) {
+    const out = [];
+    r.e.forEach((x, i) => out.push([pe0 + i, x]));
+    r.env.forEach((x, i) => out.push([ENV_ID[i], x]));
+    for (const k of Object.keys(r.slots)) out.push([ID[k], r.slots[k]]);
+    return out;
+  }
+  return { LEN, MSG, MODAL, FIELDS, ID, ENV_ID, unpack, pack, parse, toLead, fromLead, toDevice };
+})();
+
 /* ----------------------------------------------------------------- DIGITAL --- */
 /* DIGITAL (engine 1, four-operator FM) was replaced by FM6 (1.0): the firmware keeps engine 1 reserved (its name
    "-"; a FELUCCA_FM4=1 build has DIGITAL back) and turns every DIGITAL sound into an FM6 one with a patch of its own
@@ -1687,7 +1807,7 @@ function makeMockDevice(opt = {}) {
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "-", "VOICE", "TRIO", "WHEEL",
-      "-", "PHYS", "DRUM", "NOISE", "FM6", "-", "SHDRUM", "SWARM", "FMTONE", "WAVETONE"], 0), E("SET", NGO, 0),
+      "-", "PHYS", "DRUM", "LEAD", "FM6", "-", "SHDRUM", "SWARM", "FMTONE", "WAVETONE"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
     D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
@@ -1753,11 +1873,10 @@ function makeMockDevice(opt = {}) {
         P("HARP", [3, 8, 62, 74, 60, 90, 0, 0], [0, 100, 127, 80], 0, 3)] },
     { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["DRUM-X", "909 CLUB", "808 BOOM", "LOFI", "INDUSTRY", "ACOUSTIC", "DUB", "TECHNO", "BREAKS", "808 BOOM", "TECHNO", "BREAKS", "SH"], 0), D("TUNE", F.PCT, 0, 127, 64), D("TONE", F.PCT, 0, 127, 64), D("DECY", F.PCT, 0, 127, 64), D("NOIS", F.PCT, 0, 127, 64), D("FMENV", F.PCT, 0, 127, 0), D("FOLD", F.PCT, 0, 127, 0), D("MORPH", F.PCT, 0, 127, 64)],
       presets: [P("DRUM-X", [0, 64, 70, 64, 64, 0, 0, 64], [0, 100, 127, 100], 0, 12), P("909 CLUB", [1, 64, 76, 64, 64, 0, 0, 60], [0, 100, 127, 100], 0, 12), P("808 BOOM", [2, 60, 56, 76, 60, 0, 0, 58], [0, 100, 127, 100], 0, 12), P("LOFI DUST", [3, 64, 50, 54, 76, 0, 0, 70], [0, 100, 127, 100], 0, 12), P("INDUSTRIAL", [4, 66, 88, 70, 74, 20, 0, 72], [0, 100, 127, 100], 0, 12), P("ACOUSTIC", [5, 64, 58, 62, 64, 0, 0, 56], [0, 100, 127, 100], 0, 12), P("DUB ROOTS", [6, 60, 52, 70, 60, 0, 0, 60], [0, 100, 127, 100], 0, 12), P("TECHNO RAW", [7, 64, 80, 62, 66, 10, 0, 66], [0, 100, 127, 100], 0, 12), P("BREAKS", [8, 66, 72, 62, 70, 0, 0, 62], [0, 100, 127, 100], 0, 12), P("DRUM BRT", [0, 82, 99, 32, 93, 0, 0, 64], [14, 127, 127, 127], 0, 12), P("DRUM/INDU", [0, 65, 74, 66, 66, 10, 0, 70], [0, 100, 127, 100], 0, 12), P("909/DUB", [1, 61, 58, 68, 61, 0, 0, 60], [0, 100, 127, 100], 0, 12), P("808/BREA", [2, 63, 60, 69, 68, 0, 0, 59], [0, 75, 127, 100], 0, 12), P("LOFI BRT", [3, 96, 59, 88, 86, 17, 0, 70], [0, 100, 127, 50], 0, 12), P("LOFI/DUB", [3, 62, 52, 58, 72, 0, 0, 68], [0, 100, 127, 100], 0, 12), P("INDUS DRK", [4, 66, 88, 70, 74, 20, 0, 72], [30, 127, 127, 100], 0, 12), P("INDUS DRK 2", [4, 66, 88, 70, 74, 20, 0, 72], [0, 100, 127, 100], 0, 12), P("INDU/909", [4, 65, 82, 67, 69, 15, 0, 69], [0, 100, 127, 100], 0, 12), P("ACOUS LNG", [5, 64, 58, 62, 64, 0, 0, 56], [0, 100, 127, 127], 0, 12), P("ACOUS HARD", [5, 64, 58, 62, 64, 0, 0, 56], [0, 55, 127, 127], 0, 12), P("ACOUS HARD ", [5, 64, 53, 43, 64, 6, 0, 24], [14, 100, 127, 50], 0, 12), P("ACOUS BRT", [5, 72, 58, 27, 64, 34, 12, 56], [0, 127, 127, 127], 0, 12), P("DUB SHT", [6, 60, 52, 70, 60, 0, 0, 60], [30, 100, 127, 100], 0, 12), P("TECHN DRK", [7, 80, 80, 27, 66, 8, 19, 36], [30, 100, 127, 127], 0, 12), P("TECHN BRT", [7, 95, 80, 62, 66, 0, 14, 85], [30, 100, 127, 75], 0, 12), P("BREAK BRT", [8, 66, 72, 62, 70, 0, 0, 62], [0, 100, 127, 75], 0, 12), P("BREAK SHT", [8, 66, 72, 62, 70, 0, 0, 62], [0, 127, 127, 127], 0, 12), P("SH KIT", [12, 64, 64, 64, 64, 0, 0, 64], [0, 100, 127, 100], 0, 12), P("SH PUNCH", [12, 64, 64, 64, 64, 0, 0, 64], [0, 100, 127, 100], 0, 12), P("SH DEEP", [12, 64, 64, 64, 64, 0, 0, 64], [0, 100, 127, 100], 0, 12)] },
-    { name: "NOISE", titles: ["SRC", "MOVE"], edit: [E("MODE", ["ANLG", "DUST", "LFSR", "META"], 0), D("COLR", F.PCT, 0, 127, 64),
-        D("FREQ", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("TRK", F.PCT, 0, 127, 64), D("DENS", F.PCT, 0, 127, 0),
-        D("DRFT", F.PCT, 0, 127, 0), D("CRSH", F.PCT, 0, 127, 0)],
-      presets: [P("WIND", [0, 64, 70, 100, 127, 0, 70, 0], [90, 90, 110, 90], 0, 5), P("RAIN", [1, 30, 88, 80, 64, 105, 40, 0], [10, 90, 127, 70], 0, 5),
-        P("ARCADE", [2, 0, 127, 0, 127, 112, 0, 84], [0, 80, 0, 50], 0, 3), P("METAL", [3, 0, 100, 40, 100, 32, 0, 0], [0, 75, 40, 60], 0, 7)] },
+    { name: "LEAD", titles: ["OSC", "MIX"], edit: [E("WAV1", ["SIN", "SAW", "PLS", "TRI"], 1), E("WAV2", ["SAW", "PLS", "TRI", "NOIS"], 1),
+        D("PTCH", F.SEMI, -24, 24, 0), D("DETN", F.INT, -50, 50, 9, null, "ct"), D("MIX", F.PCT, 0, 127, 64),
+        E("XMOD", ["OFF", "SYNC", "RING", "S+R"], 0), D("CUT", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 25)],
+      presets: [P("LD SAW", [1, 1, 0, 9, 64, 0, 80, 25], [0, 60, 100, 45], 1, 4), P("LD SYNC", [1, 0, 7, 0, 127, 1, 90, 30], [0, 70, 100, 40], 1, 4), P("LD PULSE", [2, 0, 0, 10, 50, 0, 75, 30], [0, 55, 100, 40], 1, 4), P("LD FM", [0, 2, 12, 0, 0, 0, 95, 10], [0, 60, 100, 40], 1, 4), P("LD RING", [1, 0, 5, 3, 64, 2, 85, 20], [0, 65, 100, 40], 1, 4), P("LD MONO", [1, 1, -12, 6, 60, 0, 70, 35], [0, 60, 100, 35], 1, 4), P("ACID", [1, 0, 0, 0, 0, 0, 40, 90], [0, 50, 0, 25], 1, 2), P("LD 303", [1, 0, 0, 0, 0, 0, 35, 80], [0, 55, 0, 30], 1, 2), P("SUB BASS", [0, 0, 0, 0, 0, 0, 50, 10], [0, 60, 100, 25], 1, 8), P("FM BASS", [0, 2, 0, 0, 0, 0, 60, 20], [0, 60, 70, 25], 1, 2), P("PLUCK BS", [1, 1, -12, 5, 64, 0, 45, 30], [0, 50, 0, 20], 1, 2), P("RING BASS", [2, 0, -12, 0, 50, 2, 55, 30], [0, 55, 80, 25], 1, 2), P("SQR BASS", [2, 0, -12, 0, 40, 0, 55, 25], [0, 60, 100, 30], 1, 2), P("PAD SAW", [1, 1, 0, 12, 64, 0, 60, 15], [70, 80, 110, 95], 0, 5), P("PAD PWM", [2, 2, 0, 7, 60, 0, 65, 15], [60, 85, 110, 90], 0, 5), P("PAD FM", [0, 2, 7, 0, 0, 0, 85, 10], [75, 90, 105, 95], 0, 5), P("PAD NOISE", [1, 3, 0, 0, 30, 0, 60, 20], [80, 90, 100, 100], 0, 5), P("PAD SYNC", [1, 1, 7, 4, 100, 1, 70, 15], [65, 85, 105, 90], 0, 5), P("PAD HP", [1, 1, 0, 10, 64, 0, 45, 10], [75, 90, 110, 100], 0, 5), P("CHOIR", [3, 0, 12, 6, 45, 0, 55, 25], [70, 85, 110, 95], 0, 5), P("EPIANO", [0, 2, 12, 0, 0, 0, 100, 10], [0, 85, 20, 65], 0, 6), P("CLAV", [2, 0, 0, 0, 40, 0, 70, 30], [0, 55, 0, 25], 0, 6), P("ORGAN", [0, 0, 12, 0, 50, 0, 127, 0], [0, 40, 127, 30], 0, 6), P("LD BELL", [0, 2, 19, 0, 60, 2, 100, 20], [0, 95, 0, 80], 0, 7), P("KALIMBA", [0, 0, 12, 0, 40, 0, 110, 5], [0, 70, 0, 50], 0, 7), P("LD PLUCK", [1, 1, 0, 6, 64, 0, 50, 30], [0, 55, 0, 30], 0, 6), P("LD STAB", [1, 1, 0, 12, 70, 0, 65, 25], [0, 60, 40, 30], 0, 6), P("LD ZAP", [1, 0, 0, 0, 127, 1, 100, 40], [0, 45, 0, 30], 0, 3), P("NOISE HIT", [1, 3, 0, 0, 127, 0, 70, 40], [0, 40, 0, 30], 0, 0), P("WIND", [1, 3, 0, 0, 127, 0, 60, 70], [90, 100, 110, 110], 0, 0), P("LD LASER", [0, 2, 0, 0, 0, 0, 110, 20], [0, 60, 0, 40], 0, 3), P("LD RISER", [1, 0, 7, 5, 127, 1, 85, 30], [100, 110, 127, 60], 0, 0)] },
     { name: "FM6", titles: ["OPS", "PATCH"], edit: [D("ALG", F.INT, 0, 32, 0), D("FB", F.INT, -7, 7, 0), D("MLVL", F.BIPCT, -64, 63, 0),
         D("MRAT", F.INT, -16, 16, 0), D("MEG", F.BIPCT, -64, 63, 0), D("VMOD", F.INT, -7, 7, 0), D("DTUN", F.PCT, 0, 127, 0),
         D("SLOT", F.INT, 0, FM6.FACTORY_PK.length + 32, 0)],   /* F1..F8, then OWN (eng_fm6.c, 1.0.3), B1..B32 (1.4.1) */
@@ -2431,7 +2550,7 @@ function enumShown(d) {
 /* the order the device shows its engines in (src/engines.c ENGINE_ORDER): the lists here follow it, the protocol keeps
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
-const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "NOISE",
+const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "LEAD",
   "SLICE", "DRUM", "SHDRUM", "SWARM", "FMTONE", "WAVETONE"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
@@ -2509,6 +2628,10 @@ const TEXT = {
   ja: {
     tabFm6: "6-OP FM", fm6Help: "FM6 エンジンの音色（6 オペレーター）をまるごと編集します。本体のノブはこの音色の上にかかるマクロです。SysEx を読み込み、音色を選んで編集し、トラックへ送るとすぐ鳴ります。トラックの音色はひとつで、読み込んだものがそのトラックの音色になります（SLOT は OWN）。",
     fm6Source: "音色の出し入れ", fm6ReadBtn: "トラックから読む", fm6SendBtn: "トラックへ送る", fm6Live: "編集しながら送る",
+    tabLead: "LEAD", leadNoEngine: "このファームウェアには LEAD エンジンがありません",
+    ldxTitle: "ハードウェアのパッチ", ldxHelp: "LEAD の元になったハードウェアシンセの SysEx（工場出荷プログラムの SysEx ファイル）を LEAD の音に変換して選択トラックへ送り、LEAD の音をそのハードウェアのプログラムとして書き出せます。対応しているのは一部の項目だけです（OSC 波形、OSC 2 ピッチ / ファイン、アンプエンベロープ、フィルタータイプ）。それ以外は LEAD の初期値（読み込み）または典型値（書き出し）になります。項目ごとに、対応づけの確かさを表示します。",
+    ldxImport: "SysEx を読み込む", ldxExport: "SysEx に書き出し", ldxApply: "LEAD に送る", ldxProg: "プログラム", ldxGuess: "推測の項目も使う",
+    ldxNone: "プログラムが見つかりません", ldxNotLead: "LEAD の音を選んでから書き出してください", ldxDone: "プログラムを送りました",
     fm6Import: "SysEx を読み込む", fm6Export: "SysEx に書き出し",
     fm6Init: "初期音色", fm6Voice: "ボイス", fm6Ops: "オペレーター", fm6Carriers: "キャリア", fm6Feedback: "フィードバック",
     fm6PitchEg: "ピッチ EG", fm6Freq: "周波数",
@@ -2612,6 +2735,10 @@ const TEXT = {
   en: {
     tabFm6: "6-OP FM", fm6Help: "Edit the whole patch of the FM6 engine (six operators). The device's knobs are macros on top of it. Import a SysEx file, pick a voice, edit it and send it to a track: it plays at once. A track has one patch: whatever you load becomes it (SLOT shows OWN).",
     fm6Source: "Patches in and out", fm6ReadBtn: "Read from track", fm6SendBtn: "Send to track", fm6Live: "Send while editing",
+    tabLead: "LEAD", leadNoEngine: "This firmware has no LEAD engine",
+    ldxTitle: "Hardware patches", ldxHelp: "Convert a SysEx file of the hardware synth LEAD is modeled on (the SysEx files of its factory library) to a LEAD sound and send it to the selected track, or write the LEAD sound as a program of that hardware. Only some fields are mapped (OSC waves, OSC 2 pitch / fine, amp envelope, filter type): the rest take LEAD's defaults on import and typical values on export. Each field shows how sure its mapping is.",
+    ldxImport: "Import SysEx", ldxExport: "Export SysEx", ldxApply: "Send to LEAD", ldxProg: "Program", ldxGuess: "also use the guessed fields",
+    ldxNone: "No program in that file", ldxNotLead: "Pick a LEAD sound first", ldxDone: "Program sent",
     fm6Import: "Import SysEx", fm6Export: "Export SysEx",
     fm6Init: "Init voice", fm6Voice: "Voice", fm6Ops: "Operators", fm6Carriers: "carriers", fm6Feedback: "feedback",
     fm6PitchEg: "Pitch EG", fm6Freq: "Frequency",
@@ -2735,9 +2862,9 @@ $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; 
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
-const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings"];
+const TABS = ["sound", "fm6", "lead", "sequencer", "tracks", "library", "samples", "projects", "settings"];
 const TAB_KEY = "felucca-editor-tab";
-const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
+const TRACK_TABS = new Set(["sound", "lead", "sequencer", "tracks"]);
 let tab = (() => {
   const h = location.hash.slice(1);
   if (TABS.includes(h)) return h;
@@ -2775,6 +2902,7 @@ function renderPanels() {
     if (mine && "dev" in p.dataset && !dev) hint = want === "fm6" ? "fm6NeedDevice" : "needDevice";   /* (while connecting the status line says it) */
     if (show && want === "fm6" && fm6Off) { show = false; hint = "fm6NoFw"; }
     if (show && want === "samples" && !dev.smp) { show = false; hint = "smpNone"; }
+    if (show && want === "lead" && !dev.info.engines.includes("LEAD")) { show = false; hint = "leadNoEngine"; }   /* (the LEAD tab: a hint without the LEAD engine) */
     p.hidden = !show;
   }
   $("hint").hidden = !hint;
@@ -2847,8 +2975,13 @@ const LAYOUT = (pe0) => [
   { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, 8]]] },
   { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ["LFO DEST", 0, [13, 14, 15, 16]]] },
   ...(pe0 >= 61 ? [{ t: "MOD", mod: 49 }] : []),   /* the matrix: P_M1SRC 49 .. P_M4AMT 60, one row per slot */
-  { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
-    ...(pe0 >= 91 && engName() === "DRUM" ? [["LANES", 0, P_LANES.slice(0, 4)], ["LANES 2", 0, P_LANES.slice(4)]] : [])] },   /* lane levels 83..90 */
+  { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]],
+    ...(pe0 >= 81 && engName() === "LEAD" ? [] : [["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]]]),
+    ...(pe0 >= 91 && engName() === "DRUM" ? [["LANES", 0, P_LANES.slice(0, 4)], ["LANES 2", 0, P_LANES.slice(4)]] : []),   /* lane levels 83..90 */
+    /* LEAD's pages (eng_lead.c; the FM operator slots 61..74 and its E4..E7): MIX = MIX XMOD SAT, OSC 2 = FM SUB SUBW KTRK,
+       FILTER = FTYP CUT RES KEY, MOD ENV = MAMT MATK MDEC MDST (its EDIT 2 is hidden) */
+    ...(pe0 >= 81 && engName() === "LEAD" ? [["MIX", 0, [pe0 + 4, pe0 + 5, 68]], ["OSC 2", 0, [61, 62, 63, 64]], ["FILTER", 0, [66, pe0 + 6, pe0 + 7, 67]],
+      ["MOD ENV", 0, [71, 72, 73, 74]]] : [])] },
   ...(pe0 >= 81 && engName() === "DIGITAL" ? [{ t: "OP ENV", pages: [   /* P_FM1_ATK 61: ATK DEC SUS REL LVL per operator (a
                                                     FELUCCA_FM4=1 firmware only: DIGITAL retired, its engine is "-") */
     ...[0, 1, 2, 3].map((k) => [`OP${k + 1}`, 0, [61 + 5 * k, 62 + 5 * k, 63 + 5 * k, 64 + 5 * k]]),
@@ -5053,6 +5186,56 @@ function downloadBytes(name, bytes) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 $("fm6export").addEventListener("click", () => downloadBytes(`${fileSlug(FM6.name(fm6v))}.syx`, FM6.singleSysex(fm6v)));
+
+/* The LEAD tab: hardware programs <-> LEAD (LDX above). Import a SysEx file, pick a program, see which fields map and how surely,
+   send it to the selected track; or write the LEAD sound as a program of that hardware */
+let ldxProgs = [];
+function ldxReport() {
+  const p = ldxProgs[+$("ldxprog").value];
+  if (!p) { $("ldxreport").textContent = ""; return; }
+  const r = LDX.toLead(p.d, { guess: $("ldxguess").checked }), mark = { confirmed: "\u2713", likely: "~", guess: "?" };
+  $("ldxreport").textContent = [...r.applied.map((a) => `${mark[a.level]} ${a.name}: LDX ${a.from.join(" ")} -> ${a.to}`),
+    ...r.skipped.map((a) => `  ${a.name}: LDX ${a.from.join(" ")} (a guess, not used)`)].join("\n");
+}
+$("ldximport").addEventListener("click", () => $("ldxfile").click());
+$("ldxfile").addEventListener("change", async () => {
+  const f = $("ldxfile").files[0];
+  $("ldxfile").value = "";
+  if (!f) return;
+  const r = LDX.parse(new Uint8Array(await f.arrayBuffer()));
+  ldxProgs = r.programs;
+  $("ldxprog").replaceChildren(...ldxProgs.map((x, i) => el("option", { value: i, text: `${x.bank - 1}.${x.prog + 1}` })));
+  ldxReport();
+  if (!ldxProgs.length) sayK("ldxNone", f.name); else sayK("imported", `${f.name}: ${ldxProgs.length}`);
+});
+$("ldxprog").addEventListener("change", ldxReport);
+$("ldxguess").addEventListener("change", ldxReport);
+$("ldxapply").addEventListener("click", async () => {
+  const p = ldxProgs[+$("ldxprog").value];
+  if (!dev || !p) return;
+  const li = dev.info.engines.indexOf("LEAD");
+  if (li < 0) return;
+  const releaseBusy = beginBusy();
+  try {
+    selfLoad(true);
+    if (dev.dump.engine !== li) {
+      parse[CMD.PRESET](await rq(req.preset(li, 0)));
+      dev.dump = await getDump();
+      await rereadEngineDesc();
+    }
+    for (const [id, v] of LDX.toDevice(LDX.toLead(p.d, { guess: $("ldxguess").checked }), dev.info.pe0)) await rq(req.set(0, id, v));
+    dev.dump = await getDump();
+    updateBrowser();
+    refreshAll();
+    sayK("ldxDone");
+  } catch (err) { report(err); } finally { releaseBusy(); }
+});
+$("ldxexport").addEventListener("click", () => {
+  if (!dev || !dev.dump || dev.info.engines[dev.dump.engine] !== "LEAD") { sayK("ldxNotLead"); return; }
+  const P = dev.dump.p, pe0 = dev.info.pe0;
+  const v = { e: Array.from({ length: 8 }, (_, i) => P[pe0 + i]), env: LDX.ENV_ID.map((id) => P[id]), slots: { FTYP: P[LDX.ID.FTYP] } };
+  downloadBytes(`${fileSlug("lead")}.syx`, LDX.pack(LDX.fromLead(v)));
+});
 
 $("connect").addEventListener("click", () => {
   if (dev) { wantConnected = false; disconnect(); } else connect();

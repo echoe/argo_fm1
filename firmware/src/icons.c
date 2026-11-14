@@ -153,7 +153,8 @@ static const icon_map_t ICON_MAP[] = {
     {"SNAP", ICON_NOISE}, {"KIT", ICON_SAMPLE}, {"KICK", ICON_ATTACK},       /* PHYS: MEMB, SYMP; DRUM */
     {"VOWL", ICON_VOICE}, {"VOWL2", ICON_VOICE}, {"TALK", ICON_SWEEP}, {"SHIFT", ICON_TRANSPOSE},
     {"BUZZ", ICON_PULSE}, {"BRTH", ICON_NOISE}, {"Q", ICON_RESO}, {"RAND", ICON_PROB},
-    {"FREQ", ICON_CUTOFF}, {"TRK", ICON_KEYTRACK}, {"DRFT", ICON_SWEEP},   /* NOISE (COLR, DENS, CRSH: above) */
+    {"FREQ", ICON_CUTOFF}, {"TRK", ICON_KEYTRACK}, {"DRFT", ICON_SWEEP},   /* (formerly NOISE) */
+    {"WAV1", ICON_WAVE}, {"WAV2", ICON_WAVE}, {"DETN", ICON_DETUNE}, {"XMOD", ICON_MOD},   /* LEAD (PTCH, MIX, CUT, RES: above) */
     {"MLVL", ICON_MOD}, {"MRAT", ICON_RATIO}, {"MEG", ICON_DECAY}, {"VMOD", ICON_ACCENT}, {"DTUN", ICON_DETUNE},
     {"SLOT", ICON_LOAD},                                                    /* FM6 (ALG, FB: above) */
     /* fixed columns drawn by ui_draw.c (STEP page, preset browser) */
@@ -187,7 +188,8 @@ static uint32_t param_icon(const param_desc_t *d, int32_t v)
     if (!d)
         return ICON_NONE;
     if (d->fmt == F_ENUM && d->names && v >= d->min && v <= d->max &&
-        (str_eq(d->label, "WAVE") || str_eq(d->label, "WAVE2")))
+        (str_eq(d->label, "WAVE") || str_eq(d->label, "WAVE2") || str_eq(d->label, "WAV1") ||
+         str_eq(d->label, "WAV2")))   /* (LEAD: WAV1 / WAV2) */
         for (i = 0; i < sizeof(WAVE_ICON) / sizeof(WAVE_ICON[0]); i++)
             if (str_eq(d->names[v], WAVE_ICON[i].label))
                 return WAVE_ICON[i].icon;
@@ -201,10 +203,6 @@ static uint32_t param_icon(const param_desc_t *d, int32_t v)
         return ICON_CUTOFF;                   /* ANALOG's filter TYPE (1.5): "TYPE" is also the reverb's */
     if (d == &TP[P_ESYNC])
         return ICON_TEMPO;                    /* ENV SYNC (1.5): as LFO 2's SYNC */
-    if (d->names == N_NOISE_MODE)
-        return ICON_NOISE;                    /* NOISE's MODE is the source; its CLK the register clock */
-    if (d == &NOISE_CLK)
-        return ICON_RATE;
 #if FELUCCA_SLICE
     if (d->names == N_SLC_DIV)
         return ICON_SLICE;                    /* SLICE: DIV is the slicing, MODE the gate, REV the direction */

@@ -448,6 +448,8 @@ static int page_visible(uint32_t i)
 #endif
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
+    if (PAGES[i].fam == FAM_EDIT && PAGES[i].scope == SC_ENGINE && PAGES[i].id[0] == P_E4)   /* EDIT 2: not LEAD's (its MIX and FILTER pages hold E4..E7) */
+        return TSEL->eng_req % NENGINES != ENGI_LEAD;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)
@@ -1410,6 +1412,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
 #endif
     fmt_track_loaded(t);                              /* FMTONE: the preset's operator slots (eng_fmtone.c) */
     swm_track_loaded(t);                              /* SWARM: the preset's filter (RES, KEY, TYPE) */
+    lead_track_loaded(t);                             /* LEAD: the preset's slots */
     wvt_track_loaded(t);                              /* WAVETONE: the preset's slots */
     load_end(t);
 }
