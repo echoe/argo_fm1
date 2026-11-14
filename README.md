@@ -263,3 +263,5 @@ If you don't know why something is happening to your sound, there are a few plac
 
 ## That's it!
 If you have any requests or suggestions, please feel free to let me know!
+
+You can also try Argo in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
