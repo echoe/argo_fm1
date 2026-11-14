@@ -1,7 +1,8 @@
 {
-  "what": "An LLM-written expansion of Felucca with samples removed and a few synth engines added, with a focus on multiple patterns per track, per-step patch switching, and synthesis. This firmware was previously known as Felucca 8 patterns.",
+  "what": "An LLM-written expansion of Felucca with multiple patterns per track, per-step patch switching, multiple synth engines that emulate the Nord Lead and parts of the SH-4d and Elektron Digitone II, and no samples.",
   "author": "echoe",
   "kinds": ["groove"],
+  "play": "https://joakimeriksson.github.io/fm1-emu/?fw=argo",
   "editor": "https://echoe.github.io/argo_fm1/webapp/editor/",
   "image": "docs/pics/card_large.png",
   "cheat": "https://raw.githubusercontent.com/echoe/argo_fm1/refs/heads/main/docs/pics/cheatsheet.png",
