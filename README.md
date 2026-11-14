@@ -1,8 +1,28 @@
 # Argo
 
+## Table of Contents
+- [About this project](#about-this-project)
+- - [Development and support](#development-and-support)
+- - [Credits and license](#credits-and-license)
+- [Changes from Felucca](#changes-from-felucca)
+  - [Sequences within tracks](#sequences-within-tracks)
+  - [Preset changing per step](#preset-changing-per-step)
+  - [The generative arpeggiator](#the-generative-arpeggiator)
+  - [Chord improvements and modes](#chord-improvements-and-modes)
+  - [Different Synth Engines](#different-synth-engines)
+  - [Other changes](#other-changes)
+    - [Argo theme](#argo-theme)
+    - [Select controls Page](#select-controls-page)
+    - [48 user presets](48-user-presets)
+    - [EDIT: DEL STEP reminder](edit-del-step-reminder)
+    - [User slicer settings](#user-slicer-settings)
+    - [More insert effects](#more-insert-effects)
+- [Tips and tricks](#tips-and-tricks)
+- [That's it!](#that's-it)
+
 ## About this project
 
-Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1 that is built off of Felucca, removing the samples and adding in different engines.
+Argo is a multi-engine synthesizer firmware for the M-VAVE FM-1 that is built off of Felucca, removing the samples and adding in different engines. In theory it should remain synced with the most recent Felucca version as I have time or notice, with the possibility of going a little further if I start adding too many things while Felucca is in a pause.
 
 To install this on the FM-1, first connect the FM-1 to a computer by USB, open the
 [web installer](https://echoe.github.io/argo_fm1/webapp/installer) in Chrome or Edge, and press Install. No extra hardware is needed.
@@ -62,7 +82,7 @@ FM6 engine: msfa from Dexed by Google Inc. and Pascal Gauthier (Apache-2.0)
 
 M-VAVE and FM-1 are trademarks of their respective owners. Argo is not affiliated with or endorsed by them.
 
-# The differences between this and Felucca
+# Changes from Felucca
 
 Argo is built off of Felucca, just with a few tweaks. The 'selling point' features are:
 
@@ -80,7 +100,7 @@ Pictures of the new features, which may be worth a thousand words:
 
 We'll go through these in order.
 
-## 8 sequences, one sequence chain option.
+## Sequences within tracks
 
 Each track plays one of eight sequences. A sequence has its own steps, its own length, and its own automation and parameter
 locks (up to 64 records while it is not the one playing). DIV, SWING, GATE, QUANTIZE and the sound engine are set per track and you can't have different settings per sequence for them.
@@ -95,8 +115,9 @@ The page that shows this is at the end of the SEQ menu. The P1 - P4 knobs pick t
 
 ## Preset changing per step
 
-You can set a different preset per step, and this can change per sequence. The preset needs to be of the same synth engine as the track is set to, and it resets on every step. There is an upper limit of 64 changes per sequence so beware - if you want to make a lot of changes, you may hit that limit.
-To do this in the easiest way, go to SEQ, choose your step [with K1], and then page to the DETAIL 2 page. You can then scroll through and select a preset, and see if different presets are set for the 16 steps SEQ is currently set to view. You can also change the current step you're selecting with PRESET in this mode.
+You can set a different preset per step, and this can change per sequence. In theory the preset needs to be of the same synth engine as the track is set to, as it simply changes all the settings of the track to the new preset's settings. (If you switch to another synth engine's preset, it just switches to the equivalent settings - so just be aware!)
+It resets on every step, so if you want to swap for five steps you need to have five step changes. There is an upper limit of 64 changes per sequence so beware - if you want to make a lot of changes, you may hit that limit.
+To do this in the easiest way, go to SEQ and then page to the DETAIL 2 page. You can then scroll through the steps with PRESET, then once you have the step you want to change, use K1 to select the preset you want to switch to.
 If you prefer setting this in a list, you can also set the specific action individually on the 4th page of the SEQ menu, which lists all changes within the sequence.
 
 ## The generative arpeggiator
@@ -156,25 +177,42 @@ Packs are what the black keys do and the strum speed together: six are built in 
 OCT+ saves what the black keys do into the user pack you pick.
 The packs and the keys' setting are saved with the music (project SAVE, RESTORE LAST) in the sequence bank's flash.
 
-## Six new synth engines; two unique to this firmware, four from other firmwares
+## Different synth engines
+
+Compared to original Felucca, there are six different synth engines. Two are unique to this firmware, and four are borrowed from other open-source firmware.
 
 The synths in common with Felucca are:
 
-- ANALOG, FM6, PHASE, LOFI, VOCAL, TRIO, WHEEL, PHYS: default Felucca synths. (Felucca's NOISE engine is no longer built into Argo: LEAD took its engine slot, 11.)
+- ANALOG - basic analog synth
+- FM6 - 6-operator FM
+- PHASE - simple phase modulation synth
+- LOFI - low-fidelity chiptune synth
+- VOCAL - simple formant synth
+- TRIO - three-oscillator synth
+- WHEEL - organ
+- PHYS - Braids engines reworked into a physical modeling synth
 
 Synths from other firmwares are:
-- SWARM, FM-TONE, WAVETONE: Engines from the Mini-tone firmware, modeled after the Digitone II's synth engines.
-- DRUM-X: A drum engine from the Jiant firmware, modeled after Microtonic.
+From Mini-Tone:
+- SWARM - Stacked analog modeling engine
+- FM-TONE - 4-operator visual FM engine
+- WAVETONE - 2-oscillator wavetable VA synth
+From Jiant:
+- DRUM-X - Microtonic-modeled drum engine.
 
 The unique synths in this firmware are:
-- LEAD: a two-oscillator subtractive synth loosely based off of Synth2's open-source reconstruction of the Nord Lead. The controls:
+- LEAD - Iconic two-oscillator VA engine, with added sub, FM, and Sync
+- SH-DRUM - Simple two-oscillator drum engine with effects and drum-focused envelopes
+
+For the synths specific to this firmware I'm also going to break the full controls down.
+LEAD controls/features in depth:
   - Two oscillators. The first one has Sine, Saw, Pulse, and Triangle; the second one drops Sine and adds Noise. Adjust pitch and detune as well.
   - Mix amount (from osc1 to osc2), Modulation (sync, ring, or both), and filter saturation.
   - FM amount (OSC 2 to OSC 1 phase modulation), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: Sine, Tri, Saw, Square), Keytrack (OSC 2 key tracking).
   - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
   - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
   - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
-- SH-TONE: A drum engine unique to this firmware, loosely modeled after the SH-4d's drum engine. There is both a drum engine around this with several presets, and a synth engine where you can change every setting. The architecture is:
+SH-TONE controls/features in depth:
   - Two oscillators that can be either SIN, TRI, SAW, SQR, or NOISE.
   - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH AMT.
   - Sweep pitch and time, and change the coarse pitch of each oscillator (TUN A, TUN B), making it easier to get a simple drum fast.
@@ -182,13 +220,13 @@ The unique synths in this firmware are:
   - Drive/Click/Fold/Crush end of chain effects.
   - An ending LP/BP/HP filter.
 
-## Other non-effects changes
+## Other changes
 
 ### Argo theme
 
 There's a new theme just for this fork :) It's just salmon-colored.
 
-### SELECT is set to PAGE by default
+### SELECT controls PAGE
 
 You can still change it in the menu, but it's set to page between pages by default. I hate clicking the button multiple times to page between them every time, so this default was changed.
 
@@ -197,21 +235,29 @@ You can still change it in the menu, but it's set to page between pages by defau
 We've removed the saved patterns from presets in order to have more space to add additional presets. 
 Note: The last 16 presets can't hold FM6 patches. This is due to some weird patch rules with those patches specifically.
 
-### EDIT: DEL STEP reminder when opening the sequencer menu
+### EDIT DEL STEP reminder
 
 It's easy to forget that EDIT deletes a step within the sequencer, and nobody ever turns on the help menus. So now this help text flashes when you open the sequencer up. I am still feeling this change out - part of me wonders if just turning HELP on by default would resolve this - but I think it's fine for now.
 
-## Effects changes
-
-### USER Slicer setting on the SLICER 2 page
+### USER Slicer settings
 
 In FX, the SLICER has a USER pattern (PAT 17). On the SLICER 2 page the white keys toggle its 16 steps (the first key copies the preset you had
 selected). There is one USER pattern per project, saved with it.
 The keys still play notes so watch out if you're doing it live :)
 
-### Additional INSERT effects
+### More INSERT effects
 
 We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
 
+## Tips and tricks
+
+If you don't know why something is happening to your sound, there are a few places to check.
+- FX, especially Slicer - make sure it isn't on.
+- Arp - make sure the generative mode isn't on if it shouldn't be.
+- Check the pages under SEQ to make sure you're not swapping presets or have recorded something else inadvertently. Everything that's recorded will be under the fourth page.
+- Hold GLO to check that you haven't muted your track!
+- If all else fails, check the LFO pages to make sure there's no LFO routing to what's being changed - either on the first three pages, or on the mod matrix page.
+- If your chord mode is not playing a chord, make sure your preset isn't a mono, legato, or unison preset! You can check on the 'VOICE' page when editing the synth: usually this will be the third-to-last page.
+
 ## That's it!
-If you have any requests or suggestions, please feel free!
+If you have any requests or suggestions, please feel free to let me know!
