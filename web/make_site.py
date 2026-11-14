@@ -30,7 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
 REPO = "https://github.com/echoe/argo_fm1"
-EMU = "https://joakimeriksson.github.io/fm1-emu/?fw=local&mhz=100"   # (the web emulator the README points to)
+EMU = "https://joakimeriksson.github.io/fm1-emu/?fw=argo&mhz=100"   # (the web emulator the README points to)
 
 
 def strip_module(src):
