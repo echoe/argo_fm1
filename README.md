@@ -212,6 +212,8 @@ LEAD controls/features in depth:
   - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
   - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
   - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
+
+
 SH-TONE controls/features in depth:
   - Two oscillators that can be either SIN, TRI, SAW, SQR, or NOISE.
   - You can either MIX, FM, RING, or SYNC the two oscillators at a DEPTH AMT.
