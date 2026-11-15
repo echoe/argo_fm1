@@ -233,7 +233,7 @@ int main(void)
     }
     {   /* names */
         const param_desc_t *d;
-        bad += check("INSRT has TAPE as 10 and GRAIN stays 9", TP[P_ITYPE].max == IT_TAPE && IT_TAPE == 10 && IT_GRAIN == 9);
+        bad += check("INSRT has TAPE as 10 and GRAIN stays 9", TP[P_ITYPE].max >= IT_TAPE && IT_TAPE == 10 && IT_GRAIN == 9);
         d = ins_desc(IT_TAPE, 0);
         bad += check("TAPE's values are DRIVE WOW TONE", !strcmp(d->label, "DRIVE") && !strcmp(ins_desc(IT_TAPE, 1)->label, "WOW") &&
                                                          !strcmp(ins_desc(IT_TAPE, 2)->label, "TONE"));

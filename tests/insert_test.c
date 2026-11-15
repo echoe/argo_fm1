@@ -442,6 +442,89 @@ static void test_stored(void)
     }
 }
 
+
+/* ------------------------------------------------------------------ 7 --- */
+/* COMB (Argo): FREQ FDBK DAMP; the line is half of the SLICER's buffer, the INSERT holds it as GRAIN does */
+static void run_one(const int32_t *p1, int32_t *out)
+{
+    track_t *t = &trk[0];
+    uint32_t i;
+    memset(ins, 0, sizeof ins);
+    memset(sl_buf, 0, sizeof sl_buf);
+    memset(ins_gr, 0, sizeof ins_gr);
+    t->ins_run = 0;
+    set_ins(t, p1[0], p1[1], p1[2], p1[3], p1[4]);
+    memcpy(out, sig_in, sizeof sig_in);
+    for (i = 0; i < NS; i += CTL)
+        track_insert(t, out + i, CTL);
+}
+/* the gain of a steady sine at hz through a COMB with FREQ index fi, FDBK fb and DAMP dmp: the RMS over the last second against the input's */
+static double comb_gain(int32_t fi, int32_t fb, int32_t dmp, double hz)
+{
+    static int32_t so[NS];
+    int32_t c1[5] = {IT_COMB, 0, 0, 0, 127};
+    double sy = 0, sx = 0;
+    uint32_t i;
+    for (i = 0; i < NS; i++)
+        sig_in[i] = (int32_t)(20000.0 * sin(6.283185307179586 * hz * (double)i / FS));
+    c1[1] = fi; c1[2] = fb; c1[3] = dmp;
+    run_one(c1, so);
+    for (i = NS - FS; i < NS; i++) {
+        sy += (double)so[i] * so[i];
+        sx += (double)sig_in[i] * sig_in[i];
+    }
+    return sqrt(sy / sx);
+}
+static void test_comb(void)
+{
+    static int32_t y1[NS], y2[NS];
+    static const int32_t OFF[5] = {IT_OFF, 64, 96, 96, 127};
+    uint32_t i;
+    int ok;
+    fresh(0, 0);
+    {
+        int32_t fi = 80, fb_pos = 118 /* +90 */, fb_neg = 9 /* -90 */;
+        double f = (double)CUTOFF_HZ[fi], a_t, a_n, b_t, b_n;
+        a_t = comb_gain(fi, fb_pos, 127, f);
+        a_n = comb_gain(fi, fb_pos, 127, f * 1.5);
+        b_t = comb_gain(fi, fb_neg, 127, f * 1.5);
+        b_n = comb_gain(fi, fb_neg, 127, f);
+        printf("insert:   COMB at %.0f Hz, FDBK +90 %%: tooth %.3f, notch %.3f; FDBK -90 %%: tooth %.3f, notch %.3f\n", f, a_t, a_n, b_t, b_n);
+        ck("COMB: FDBK +90 %: a sine at FREQ passes (> 0.8), one between the teeth is notched (< 0.15)", a_t > 0.8 && a_t < 1.2 && a_n < 0.15);
+        ck("COMB: FDBK -90 %: odd harmonics pass (> 0.8), FREQ itself is notched (< 0.15)", b_t > 0.8 && b_t < 1.2 && b_n < 0.15);
+        {
+            double d0 = comb_gain(fi, 64, 127, f), hi_b = comb_gain(100, 118, 127, (double)CUTOFF_HZ[100]),
+                   hi_d = comb_gain(100, 118, 50, (double)CUTOFF_HZ[100]);
+            printf("insert:   COMB FDBK 0: gain %.3f; a tooth at %u Hz: DAMP open %.3f, DAMP closed %.3f\n", d0, (unsigned)CUTOFF_HZ[100], hi_b, hi_d);
+            ck("COMB: FDBK 0 is the dry sound (gain 1 +- 2 %)", fabs(d0 - 1.0) < 0.02);
+            ck("COMB: DAMP closed takes the high tooth down (open > 3 x closed)", hi_b > 3.0 * hi_d);
+        }
+    }
+    {   /* the ring: a sine at FREQ stopped at 0.5 s still sounds 10 periods later with FDBK +90 %, not with FDBK 0 */
+        int32_t pc[5] = {IT_COMB, 80, 118, 127, 127}, p0[5] = {IT_COMB, 80, 64, 127, 127};
+        uint32_t stop = (FS / 2u) / CTL * CTL, n10 = (uint32_t)(10.0 * FS / CUTOFF_HZ[80]) / CTL * CTL;
+        int32_t a1 = 0, a0 = 0;
+        for (i = 0; i < NS; i++)
+            sig_in[i] = i < stop ? (int32_t)(20000.0 * sin(6.283185307179586 * (double)CUTOFF_HZ[80] * (double)i / FS)) : 0;
+        run_one(pc, y1);
+        run_one(p0, y2);
+        for (i = stop + n10; i < stop + n10 + 2u * CTL; i++) {
+            a1 = abs(y1[i]) > a1 ? abs(y1[i]) : a1;
+            a0 = abs(y2[i]) > a0 ? abs(y2[i]) : a0;
+        }
+        ck("COMB: a sine at FREQ stopped rings on (> 2500 ten periods later) with FDBK +90 %, not with FDBK 0 (< 500)", a1 > 2500 && a0 < 500);
+    }
+    {   /* the SLICER's buffer: the running COMB holds it (STUT plays live), and gives it back when it is dry again */
+        int32_t pc[5] = {IT_COMB, 80, 118, 127, 127};
+        make_sig(5);
+        run_one(pc, y1);
+        ok = ins_gr[0] == 1u && trk[0].ins_run == 1u;
+        run_one(OFF, y1);
+        ok &= ins_gr[0] == 0u && !memcmp(y1, sig_in, sizeof y1);
+        ck("COMB holds the SLICER's buffer while it runs, not when OFF", ok);
+    }
+}
+
 /* ------------------------------------------------------------------ 5 --- */
 static uint64_t instr_now(void)
 {
@@ -563,6 +646,7 @@ int main(int argc, char **argv)
     test_glide();
     test_motion();
     test_stored();
+    test_comb();
     test_cost();
     if (argc > 1)
         printf("insert: %d demos in %s (each TYPE on a loop: two bars dry, two with it)\n", demos(argv[1]), argv[1]);

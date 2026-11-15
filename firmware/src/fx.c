@@ -16,6 +16,7 @@ static union {                          /* ROOM's allpasses; SPRING's allpass ch
 #define rev_ap (rev_u.ap)
 static struct {
     uint32_t dly_w, cho_w, cho_ph;
+    int32_t cho_dep, cho_ilp, cho_olp[2];   /* the chorus: the delay's swing (Q8 samples, glides), the BBD's input low-pass, the two outputs' */
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
@@ -555,31 +556,64 @@ static __attribute__((noinline)) void rev_switch(const int32_t *rev_in, int32_t 
     fx.rtype = (uint8_t)rt;
 }
 
-/* process the three buses for one block; sends in, wet stereo-equal out */
+/* CHORUS (Argo): a Juno-60 / 106 chorus, stereo. A triangle moves a short delay (3.3 ms, +-1.3 / 1.9 ms) the opposite way in the
+ * two channels; I 0.513 Hz, II 0.863 Hz, I+II (both switches in) 9.75 Hz with a shallow swing, the shimmer of the Juno's third
+ * setting (G_CRATE: three parts of its range). DEPTH (G_CDEPTH) scales the swing, 64 the Juno's. The BBD's darkness: a one-pole
+ * low-pass (~6 kHz) in front and one after each channel. The bus stays mono (wet): the left minus right, cho_sd, goes to the
+ * left and from the right with the dry mix (cho_side_mix), as HALL's does */
+static const uint32_t CHO_INC[3] = {49963u, 84053u, 949542u};            /* 0.513, 0.863, 9.75 Hz at 44.1 kHz, per sample (2^32 a cycle) */
+static const int32_t CHO_SWING[3] = {57 * 256, 84 * 256, 15 * 256};      /* +-1.3, +-1.9, +-0.35 ms, Q8 samples */
+#define CHO_CENTRE ((145 << 8) + 128)                                    /* 3.3 ms, Q8 samples */
+#define CHO_LPK 17700                                                    /* ~6 kHz one-pole, Q15 */
+static int32_t cho_sd[CTL];
+static inline int32_t cho_tap(uint32_t w, int32_t r)
+{
+    uint32_t ri = (uint32_t)r >> 8;
+    int32_t f = r & 255, c0 = cho_buf[(w - ri) & (CHO_LEN - 1u)], c1 = cho_buf[(w - ri - 1u) & (CHO_LEN - 1u)];
+    return (c0 + (((c1 - c0) * f) >> 8)) << 1;
+}
+static __attribute__((noinline)) void cho_side_mix(int32_t *l, int32_t *r, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        l[i] += cho_sd[i];
+        r[i] -= cho_sd[i];
+    }
+}
+
+/* process the three buses for one block; sends in, wet stereo-equal out (the chorus's difference in cho_sd) */
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet,
                      uint32_t n)
 {
     uint32_t i, dl = delay_samples();
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
     int32_t dmix = song.g[G_DMIX] * 258;
-    int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
-    uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+    uint32_t cmode = (uint32_t)clamp(song.g[G_CRATE], 0, 127) * 3u >> 7, cinc = CHO_INC[cmode];
+    int32_t cdep = CHO_SWING[cmode] * clamp(song.g[G_CDEPTH], 0, 127) / 64, rt;
+    if (cdep > 140 * 256)
+        cdep = 140 * 256;                                /* (the delay stays above 5 samples) */
     if (pf.ew1 && fb < THR_FB)
         fb += mulq16(THR_FB - fb, (uint32_t)pf.ew1 << 1);   /* ECHO THROW (perform.c): more feedback while held, 0.7
                                                              * at most (the loop's gain below 1: it never runs away) */
     for (i = 0; i < n; i++) {
-        int32_t y = 0, x, r;
-        /* chorus: modulated short delay, 5..15 ms */
-        cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
-        fx.cho_ph += cinc;
-        r = (400 << 8) + ((osc_sine(fx.cho_ph) + 32768) * cdepth >> 8);   /* Q8 delay: read between samples */
+        int32_t y = 0, x;
+        /* chorus: the Juno's (above) */
         {
-            uint32_t ri = (uint32_t)r >> 8;
-            int32_t f = r & 255, c0 = cho_buf[(fx.cho_w - ri) & (CHO_LEN - 1u)];
-            int32_t c1 = cho_buf[(fx.cho_w - ri - 1u) & (CHO_LEN - 1u)];
-            y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
+            int32_t tri, off, yl, yr;
+            fx.cho_ilp += mulq15((cho_in[i] >> 1) - fx.cho_ilp, CHO_LPK);
+            cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(fx.cho_ilp, -32768, 32767);
+            fx.cho_dep += clamp(cdep - fx.cho_dep, -64, 64);
+            fx.cho_ph += cinc;
+            tri = (int32_t)pf_tri(fx.cho_ph) - 32768;
+            off = (tri * fx.cho_dep) >> 15;
+            yl = cho_tap(fx.cho_w, CHO_CENTRE + off);
+            yr = cho_tap(fx.cho_w, CHO_CENTRE - off);
+            fx.cho_olp[0] += mulq15(yl - fx.cho_olp[0], CHO_LPK);
+            fx.cho_olp[1] += mulq15(yr - fx.cho_olp[1], CHO_LPK);
+            y += (fx.cho_olp[0] + fx.cho_olp[1]) >> 1;
+            cho_sd[i] = (fx.cho_olp[0] - fx.cho_olp[1]) >> 1;
+            fx.cho_w++;
         }
-        fx.cho_w++;
         /* delay with a low-passed feedback */
         x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
         fx.dly_lp += mulq15(x - fx.dly_lp, col);
@@ -646,7 +680,7 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
  * recordings) comes after, so its edges stay sharp (no flanger feedback or phaser ringing smears them) and a STUT
  * repeats the processed sound. State in the pool, per track (ins[], ~650 B each); noinline, its own loops: the audio
  * ISR's inlined path gains one test per part (track_t ins_run) */
-enum { IT_OFF, IT_SOFT, IT_HARD, IT_FOLD, IT_FUZZ, IT_CRUSH, IT_PHASER, IT_FLANGER, IT_CHORUS, IT_GRAIN, IT_TAPE, IT_N };
+enum { IT_OFF, IT_SOFT, IT_HARD, IT_FOLD, IT_FUZZ, IT_CRUSH, IT_PHASER, IT_FLANGER, IT_CHORUS, IT_GRAIN, IT_TAPE, IT_COMB, IT_N };
 #define IL_LEN 256u                     /* FLANG / CHOR: the line, samples (a power of 2: masked) */
 static const uint8_t INS_HOLD[16] = {64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1};   /* CRUSH RATE */
 typedef struct {
@@ -671,6 +705,7 @@ typedef struct {
         uint8_t on;
     } g[2];
 } ins_t;
+#define CL_LEN 2048u                    /* COMB: its line, samples: half of the track's SLICER buffer (sl_buf) */
 static ins_t ins[NTRK] __attribute__((section(".pool")));
 
 static inline int32_t ins_mixq(int32_t m) { return m >= 127 ? 32768 : m <= 0 ? 0 : m * 258; }   /* MIX -> Q15 */
@@ -942,6 +977,38 @@ static __attribute__((noinline)) void ins_grain(ins_t *s, const track_t *t, int1
     }
 }
 
+/* COMB (Argo): a feedback comb tuned to FREQ (A, CUTOFF_HZ: the delay is 44.1 kHz over it, 3 .. 2046 samples, linear between two),
+ * FDBK (B: -96 .. +96 %, params.c N_ICFB; a negative one gives the odd harmonics) and DAMP (C: the low-pass in the loop, so the
+ * ringing darkens as a string's does). y = (1 - |g|) x + g damp(y[n - D]): a steady tone at a peak comes out as loud as it went in
+ * (the teeth are as high as the dry sound, the notches between them as deep as FDBK). The line is half of the track's SLICER
+ * buffer, which the INSERT takes as GRAIN does (STUT then plays live); the loop's feedback goes through softclip as FLANG's does */
+static inline int32_t ins_comb_fb(int32_t v) { return ((clamp(v, 0, 127) * 33 >> 7) - 16) * 1966; }   /* FDBK -> Q15, -0.96 .. +0.96 */
+static __attribute__((noinline)) void ins_comb(ins_t *s, const track_t *t, int16_t *buf, int32_t *b, uint32_t n, int32_t tw)
+{
+    uint32_t i, d = (44100u << 16) / CUTOFF_HZ[clamp(t->p[P_IA], 0, 127)];
+    int32_t g = ins_comb_fb(t->p[P_IB]), in = 32768 - (g < 0 ? -g : g), k = ins_lpk(t->p[P_IC]);
+    d = d < (3u << 16) ? 3u << 16 : d > ((CL_LEN - 2u) << 16) ? (CL_LEN - 2u) << 16 : d;
+    for (i = 0; i < n; i++) {
+        int32_t x = b[i], v, y, r0, r1, fr;
+        s->w += clamp(tw - s->w, -SL_SLOPE, SL_SLOPE);
+        r0 = (int32_t)(s->wp - (d >> 16)) & (int32_t)(CL_LEN - 1u);
+        r1 = (r0 - 1) & (int32_t)(CL_LEN - 1u);
+        fr = (int32_t)((d >> 1) & 0x7FFFu);
+        v = buf[r0] + (((buf[r1] - buf[r0]) * fr) >> 15);
+        y = v * 16;                                     /* DAMP: one low-pass (x16: no offset left by the rounding) */
+        v = mulq16(y - s->lp1, (uint32_t)k);
+        y = v + s->lp1;
+        s->lp1 = y + v;
+        v = (y + 8) >> 4;
+        y = clamp(mulq15(clamp(x, -131071, 131071) >> 2, in) + softclip(mulq15(v, g)), -32767, 32767);
+        buf[s->wp] = (int16_t)y;
+        s->wp = (uint16_t)((s->wp + 1u) & (CL_LEN - 1u));
+        y <<= 2;                                        /* (y: at a quarter) */
+        s->dc += ((y << 8) - s->dc) >> 9;               /* DC blocker, ~14 Hz (a positive FDBK passes DC) */
+        b[i] = pf_mix(x, y - (s->dc >> 8), s->w);
+    }
+}
+
 /* the INSERT at rest at once (mix_part: TYPE turned OFF while the part was silent, its fade never ran) */
 static __attribute__((noinline)) void ins_rest(track_t *t)
 {
@@ -958,7 +1025,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
     int32_t ty = clamp(t->p[P_ITYPE], 0, IT_N - 1), tw;
     if (s->type != ty && !s->w)                         /* faded out: the new type from rest */
         s->type = (uint8_t)ty;
-    tw = s->type == ty && ty ? ins_mixq(t->p[P_IMIX]) : 0;
+    tw = s->type == ty && ty && !(ty == IT_COMB && sl_lent) ? ins_mixq(t->p[P_IMIX]) : 0;   /* (COMB: not while perform.c has the buffer) */
     if (!s->w) {
         if (!tw) {
             t->ins_run = 0;
@@ -967,9 +1034,16 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
         }
         memset(s, 0, sizeof *s);                        /* starting: no stale line or filter */
         s->type = (uint8_t)ty;
+        if (ty == IT_COMB) {                            /* (the buffer holds STUT's or GRAIN's last sound) */
+            uint32_t j;
+            for (j = 0; j < CL_LEN; j++)
+                sl_buf[k][j] = 0;
+        }
     }
     if (s->type == IT_GRAIN)
         ins_grain(s, t, sl_buf[k], b, n, tw);
+    else if (s->type == IT_COMB)
+        ins_comb(s, t, sl_buf[k], b, n, tw);
     else if (s->type == IT_TAPE)
         ins_tape(s, t, b, n, tw);
     else if (s->type >= IT_PHASER)
@@ -977,7 +1051,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
     else
         ins_drive(s, t, b, n, tw);
     t->ins_run = s->w != 0;                             /* (mix_part calls again while it fades) */
-    ins_gr[k] = s->type == IT_GRAIN && t->ins_run;      /* (slicer.c: STUT leaves the buffer to the grains) */
+    ins_gr[k] = (s->type == IT_GRAIN || s->type == IT_COMB) && t->ins_run;   /* (slicer.c: STUT leaves the buffer to the grains) */
 }
 
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
@@ -1078,7 +1152,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #else
     if (track_render(t, b, n))
 #endif
-        t->tail = t->p[P_ITYPE] == IT_GRAIN ? 255 : t->p[P_ITYPE] ? 64 : 16;   /* blocks of DIST / INSERT state to run out
+        t->tail = t->p[P_ITYPE] == IT_GRAIN || t->p[P_ITYPE] == IT_COMB ? 255 : t->p[P_ITYPE] ? 64 : 16;   /* blocks of DIST / INSERT state to run out
                                                          * after the last voice (the INSERT's: 46 ms, a flanger's
                                                          * feedback; GRAIN: 184 ms, the ring's 186 ms of what it heard) */
     else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t)) {
@@ -1257,6 +1331,7 @@ static void mix_block(int32_t *out, uint32_t n)
     fx_buses(send_c, send_d, send_r, wet, n);
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
+    cho_side_mix(mix_l, mix_r, n);                      /* (Argo: the chorus is, too) */
     if (scope_mix)
         scope_take_mix(n);
     if (perf) {

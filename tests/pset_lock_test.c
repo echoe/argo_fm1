@@ -69,7 +69,7 @@ int main(void)
         memcpy(snap, t->p, sizeof snap);
         motion_clear(t);
         bad += check("a preset lock is added at a step", !motion_set_lock(t, 4, MOTION_PSET, 5) && motion_lock_get(t, 4, MOTION_PSET, &v) && v == 5);
-        bad += check("a preset is only ever a LOCK: as automation it becomes one", !motion_set_event(t, 6, MOTION_PSET, 3) && (motion.event[motion.count - 1u].param & MOTION_LOCK) != 0u);
+        bad += check("a preset record keeps the kind it is given: set as automation it is AUTO (Argo; a lock stays a lock)", !motion_set_event(t, 6, MOTION_PSET, 3) && !(motion.event[motion.count - 1u].param & MOTION_LOCK) && motion_pset_get(t, 6, &v) == 2 && v == 3 && motion_pset_get(t, 4, &v) == 1 && motion_pset_get(t, 9, &v) == 0);
         bad += check("its value is checked (a preset index 0..127)", motion_set_lock(t, 7, MOTION_PSET, 200) == 1);
         motion_set_enabled(t, 1);
         motion_begin();
@@ -106,6 +106,77 @@ int main(void)
         motion_step(t, 3, &motion, 1);
         bad += check("... and both go back at the next step", !memcmp(t->p, snap, sizeof snap));
         motion_end(); motion_clear(t);
+        {   /* AUTO (Argo): the preset holds from its step to the end of the sequence; a lock over it restores to it */
+            track_t *q = &trk[2], *u = &trk[3];
+            int16_t A[P_COUNT], base[P_COUNT];
+            uint32_t st, ok = 1, ok2 = 1, ok3 = 1, ok4 = 1, ok5 = 1;
+            set_engine_of(q, ENGI_SWARM); q->engine = q->eng_req; apply_preset_to(q, 4);       /* the sound of preset 4 */
+            set_engine_of(u, ENGI_SWARM); u->engine = u->eng_req; apply_preset_to(u, 6);       /* and of 6 */
+            memcpy(A, q->p, sizeof A);
+            apply_preset_to(t, 0);
+            memcpy(base, t->p, sizeof base);
+            motion_clear(t);
+            motion_put(t, 2, MOTION_PSET, 4, 0);
+            motion_set_enabled(t, 1); motion_begin();
+            for (st = 0; st < 8u; st++) {
+                motion_step(t, st, &motion, 1);
+                ok &= st < 2u ? !memcmp(t->p, base, sizeof base) : pl_same_sound(t, q, "AUTO preset held", st);
+                ok &= t->preset == 0u;
+            }
+            motion_step(t, 0, &motion, 1);                        /* the next pass */
+            ok &= !memcmp(t->p, base, sizeof base);
+            motion_end(); motion_clear(t);
+            bad += check("AUTO preset: nothing before its step, then its sound on every step to the end, the number stays; the next pass has the track's own", ok);
+            motion_put(t, 2, MOTION_PSET, 4, 0);
+            motion_set_enabled(t, 1); motion_begin();
+            motion_step(t, 0, &motion, 1); motion_step(t, 1, &motion, 1);
+            motion_step(t, 2, &motion, 0);                        /* its chance failed: an AUTO preset is not a lock, it plays */
+            bad += check("AUTO preset: a step whose chance failed still sets it (as automation does)", pl_same_sound(t, q, "AUTO, play 0", 2));
+            motion_end(); motion_clear(t);
+            /* a preset lock over an AUTO preset, a parameter lock over it, an automation event after it */
+            motion_put(t, 2, MOTION_PSET, 4, 0);
+            motion_set_lock(t, 4, MOTION_PSET, 6);
+            motion_set_lock(t, 6, P_E4, 77);
+            motion_put(t, 3, P_DLY, 90, 0);
+            motion_set_lock(t, 7, P_REV, 55);
+            motion_set_enabled(t, 1); motion_begin();
+            for (st = 0; st < 8u; st++) {
+                int16_t w[P_COUNT];
+                motion_step(t, st, &motion, 1);
+                memcpy(w, A, sizeof w);
+                if (st >= 3u) w[P_DLY] = 90;                       /* (the automation after the preset wins over it from its step) */
+                if (st == 6u) w[P_E4] = 77;
+                if (st == 7u) w[P_REV] = 55;
+                if (st == 4u) {
+                    ok2 &= pl_same_sound(t, u, "preset lock over AUTO", st);
+                } else if (st < 2u) {
+                    ok3 &= !memcmp(t->p, base, sizeof base);
+                } else {
+                    uint32_t i, same = 1;
+                    for (i = 0; i < P_COUNT; i++)
+                        if (i != P_VOICE && (i >= P_E0 || !param_kept(i)) && i != P_ED_FX && t->p[i] != w[i]) { same = 0; printf("pset: (step %u: parameter %u is %d, expected %d)\n", (unsigned)st, (unsigned)i, t->p[i], w[i]); }
+                    ok4 &= same;
+                }
+            }
+            motion_end(); motion_clear(t);
+            bad += check("a preset lock over an AUTO preset plays its own sound on its step", ok2);
+            bad += check("... the step after it has the AUTO preset's sound again (not the track's), with the automation after the preset, the parameter lock on its step only", ok4);
+            bad += check("nothing changes before the AUTO preset", ok3);
+            /* the project holds the kind */
+            motion_put(t, 2, MOTION_PSET, 4, 0);
+            motion_set_lock(t, 3, MOTION_PSET, 5);
+            {
+                static project_t pj, pb;
+                static project_store_t pst;
+                project_capture(&pj);
+                ok5 = proj_pack(&pst, &pj) && proj_import(&pb, &pst, sizeof pst) && !memcmp(&pj, &pb, sizeof pj);
+                for (st = 0; ok5 && st < pb.motion.count; st++)
+                    if (MOTION_ID(&pb.motion.event[st]) == MOTION_PSET)
+                        ok5 &= ((pb.motion.event[st].place & 63u) == 2u) == !(pb.motion.event[st].param & MOTION_LOCK);
+            }
+            bad += check("the project keeps a preset's kind (AUTO and LOCK records round trip)", ok5);
+            motion_clear(t);
+        }
         /* the engine changing: nothing */
         motion_set_lock(t, 1, MOTION_PSET, 4);
         motion_set_enabled(t, 1); motion_begin();
@@ -173,9 +244,19 @@ int main(void)
         bad += check("... and holds at the end of the engine's list", at >= 0 && motion.event[at].value == (int16_t)(np - 1u));
         turn(EN_K4, -100000); at = motion_find(TSEL, 6, MOTION_PSET);
         bad += check("... and at the first", at >= 0 && motion.event[at].value == 0);
-        press(B_OCTUP);                                 /* OCT+ on a record: a preset stays a lock */
+        press(B_OCTUP);                                 /* OCT+ on a record: LOCK <-> AUTO, a preset too (Argo) */
         at = motion_find(TSEL, 6, MOTION_PSET);
-        bad += check("OCT+ cannot turn a preset lock into automation", at >= 0 && (motion.event[at].param & MOTION_LOCK));
+        bad += check("OCT+ turns a preset lock into AUTO (value kept) ...", at >= 0 && !(motion.event[at].param & MOTION_LOCK) && motion.event[at].value == 0 && !strcmp(ev_act_name(), "LOCK"));
+        press(B_OCTUP);
+        at = motion_find(TSEL, 6, MOTION_PSET);
+        bad += check("... and back into a lock", at >= 0 && (motion.event[at].param & MOTION_LOCK) && motion.event[at].value == 0 && !strcmp(ev_act_name(), "AUTO"));
+        turn(EN_K4, 3); press(B_OCTUP); turn(EN_K4, -100000);   /* (AUTO: its knob keeps the kind, too) */
+        at = motion_find(TSEL, 6, MOTION_PSET);
+        bad += check("a preset AUTO keeps its kind when KNOB 4 steps its value", at >= 0 && !(motion.event[at].param & MOTION_LOCK));
+        press(B_OCTUP);
+        at = motion_find(TSEL, 6, MOTION_PSET);
+        ok = at >= 0 && (motion.event[at].param & MOTION_LOCK);
+        bad += check("(a lock again for the next checks)", ok);
         {   /* the new record plays: its step sets the preset, the next puts it back */
             int16_t base[P_COUNT];
             track_t *q = &trk[1];

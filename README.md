@@ -18,6 +18,7 @@
     - [User slicer settings](#user-slicer-settings)
     - [More insert effects](#more-insert-effects)
 - [Tips and tricks](#tips-and-tricks)
+- [Changelog](#changelog)
 - [That's it!](#that's-it)
 
 ## About this project
@@ -251,6 +252,14 @@ The keys still play notes so watch out if you're doing it live :)
 
 We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
 
+There is also a COMB effect: a comb filter tuned to a pitch. FREQ sets the pitch, FDBK how long it rings (negative values give the hollow, odd-harmonics-only sound) and DAMP how quickly the ringing darkens.
+
+### Two INSERTs
+
+FX has three INSERT pages now: INSERT 1 and INSERT 2 each have a TYPE and its three values, and INSERT MIX holds MIX A and MIX B (the dry / wet of each) and LINK. LINK SER puts INSERT 2 after INSERT 1; PAR runs both on the sound and adds what each does to it. GRAIN and COMB borrow the SLICER's buffer: if INSERT 1 is a GRAIN, INSERT 2 cannot be a GRAIN or a COMB (it is passed by), and likewise a GRAIN in INSERT 2 is passed by when INSERT 1 is a COMB. Two COMBs are fine. A COMB that is still ringing when the last note ends is cut off after about 185 ms.
+
+Because of the six new parameters, a project holds 120 automation / parameter-lock records instead of 128 (an older project with more keeps its first 120). Projects saved by the previous build load with INSERT 2 OFF.
+
 ## Tips and tricks
 
 If you don't know why something is happening to your sound, there are a few places to check.
@@ -260,6 +269,19 @@ If you don't know why something is happening to your sound, there are a few plac
 - Hold GLO to check that you haven't muted your track!
 - If all else fails, check the LFO pages to make sure there's no LFO routing to what's being changed - either on the first three pages, or on the mod matrix page.
 - If your chord mode is not playing a chord, make sure your preset isn't a mono, legato, or unison preset! You can check on the 'VOICE' page when editing the synth: usually this will be the third-to-last page.
+- If you set automation and it is not saved, or it's taking up too many commands, you can use OCT+ on the AUTOMATION page under SEQ to swap between LOCK and AUTO. LOCK will only lock it at the specific step: AUTO will keep your change for the rest of the sequence.
+
+## Changelog
+Really should've had this before, oops.
+1.8.5 - second insert slot, chorus is now juno-style, added comb filter insert effect, letting preset swaps be set to AUTO mode and not LOCK
+1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
+1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
+1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay
+1.8.1 - added page for preset swaps, tape insert effect, tweaked SHDRUM engine, 16 user patch slots, new flash support, bugs and labels
+1.7.0 - rename to Argo, fully removed sample engines and samples, added Mini-Tone engines (FMTONE, SWARM, WAVETONE), added DRUM-X from JIANT, added preset change per step, added SH-DRUM engine, added granular insert effect
+1.6.1_and_sequences - tweaked generative arp settings, chord mode location, strum time settings
+1.6.1_and_sequences - added a generative arpeggiator and a chord mode.
+1.5.1_and_sequences - first release, Felucca 1.5.1 but with sequences and not with user samples.
 
 ## That's it!
 If you have any requests or suggestions, please feel free to let me know!

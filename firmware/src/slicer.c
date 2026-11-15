@@ -62,7 +62,7 @@ typedef struct {
     uint8_t rec_on;              /* recording this step */
 } sl_t;
 static sl_t sl[NTRK];
-static uint8_t ins_gr[NTRK];     /* the INSERT is GRAIN and running on this track: it has sl_buf (fx.c track_insert) */
+static uint8_t ins_gr[NTRK];     /* the INSERT is GRAIN (or Argo: COMB) and running on this track: it has sl_buf (fx.c track_insert) */
 static uint8_t sl_lent;          /* perform.c has borrowed sl_buf: STUT plays live, records nothing */
 
 static void slicer_start(void)   /* seq_start: the next block starts step 0 of every track */

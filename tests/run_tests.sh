@@ -392,6 +392,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     mkdir -p build/insert_demo
     run "INSERT (1.5): OFF / MIX 0 bit for bit, each TYPE (no DC, bounded, dry / wet), MIX glide, automation, stored, cost, demos" \
         "$OUT/insert_test" build/insert_demo
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/chorus_test" tests/chorus_test.c -lm
+    run "CHORUS (Argo): the Juno's I / II / I+II (rate, swing, centre), stereo, DEPTH, level, no click on a switch, the page" \
+        "$OUT/chorus_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sound15_test" tests/sound15_test.c -lm
     mkdir -p build/sound15_demo
     run "1.5 sound items: ANALOG filter TYPE LP / BP / HP (responses, LP and other engines bit for bit), ENV SYNC (times at several tempi), cost, demos" \
