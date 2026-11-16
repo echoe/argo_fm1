@@ -12,9 +12,23 @@
  * ECHO THROW also lifts the delay's feedback to 0.7 if it is lower (fx.c fx_buses); both glide in and out over 11.6 ms
  * (THR_SLOPE). Let go, the sends are the tracks' own again and what the buses hold rings out. The buses are the song's
  * (no RAM of their own); the tracks' REV / DLY / FDBK values are never touched (nothing saved, nothing recorded).
+ * DJ LOOP (Argo 1.8.5, after the SP-404's DJFX LOOPER; F5 by default): holding the key records the live mix for LENGTH
+ * (KNOB 3 while it plays, 371 ms at 0 down to 23 ms at 100, read when the key goes down), then loops what it caught; let go, the live
+ * mix is back. While it plays KNOB 1 is its SPEED (not FILTER: turned left of the middle from normal through stopped
+ * to backwards, right of it up to double: a record under the hand, the pitch following) and KNOB 3 its LENGTH, live
+ * (not THROW; the loop can only get shorter than what was caught), DEPTH (KNOB 4) stays the level. The two keep their
+ * own values (perf_dj_k: the FILTER and THROW macros are not touched, they go on as they were set, and a DJ LOOP
+ * knob turn is not left behind as a filter or a send when the key is let go). The speed glides (23 ms for 1x): a
+ * scratch, not a step. Stopped, the loop fades out rather than hold one sample (no DC).
+ * KNOB 2 is its MODE while it plays: turned right LIVE, left LOOP (the default). LIVE does not loop: the live mix goes
+ * through a delay line all the time and is read at the speed, two taps half a cycle apart crossfaded (as OCT UP / DN):
+ * slowed, the read falls behind the live sound until the tap is swapped for one at the live end, sped up it catches
+ * up; so it is always the sound now, just slower or faster (and backwards). LENGTH is then the window the read may
+ * lag over (93 ms at 0 down to 6 ms at 100). At exactly 1x it is the live mix itself. Turned while it plays, the mode
+ * starts the other again (LOOP records its LENGTH once more).
  * REPEAT and REVERSE start on the next 1/16 (at once while stopped); the others at once; all end when let go,
  * with a 2.9 ms ramp. Effects of different kinds stack; of the buffer ones (REPEAT, REVERSE, TAPE STOP,
- * FREEZE, OCT UP, OCT DN) the last pressed plays, and letting it go returns to the one held before.
+ * FREEZE, OCT UP, OCT DN, DJ LOOP) the last pressed plays, and letting it go returns to the one held before.
  * OCT UP / OCT DN: a harmonizer, the mix an octave up / down beside itself (after the author's earlier
  * fxHarmonizer, the classic rotating-delay shifter): two read taps of a delay sweep 128 .. 2176 samples, half a sweep apart, at the
  * speed that makes the pitch 2x / 0.5x; a raised-cosine cross-fade (the sine table) hides each tap's jump
@@ -47,6 +61,7 @@
  * PF_M1), then the mutes of the black keys */
 enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN, PF_FLG, PF_PHS,
        PF_RTHR, PF_ETHR,                      /* 1.5.1: REV THROW, ECHO THROW */
+       PF_LOOP,                               /* Argo 1.8.5: DJ LOOP */
        PF_M1, PF_N = PF_M1 + NTRK };
 #define PF_NFX PF_M1                          /* the effects a white key can hold */
 #define PF_KEYS 16u                           /* the white keys F3 .. G5 */
@@ -54,7 +69,7 @@ enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, P
 #define PF_REPEAT 0x7u                                         /* the three REPEAT rates */
 #define PF_Q (PF_REPEAT | PF_BIT(PF_REV))                      /* start on the 1/16 */
 #define PF_HARM (PF_BIT(PF_OUP) | PF_BIT(PF_ODN))
-#define PF_BUF (PF_REPEAT | PF_BIT(PF_REV) | PF_BIT(PF_TAPE) | PF_BIT(PF_FRZ) | PF_HARM)
+#define PF_BUF (PF_REPEAT | PF_BIT(PF_REV) | PF_BIT(PF_TAPE) | PF_BIT(PF_FRZ) | PF_HARM | PF_BIT(PF_LOOP))
 #define PF_MUTE (((1u << NTRK) - 1u) << PF_M1)
 #define PF_MOD (PF_BIT(PF_FLG) | PF_BIT(PF_PHS))   /* FLANGER, PHASER: their own stages after CRUSH */
 #define PB_FRAMES (NTRK * SL_LEN / 2u)        /* stereo frames in sl_buf: 8192, 371 ms at 22.05 kHz */
@@ -67,7 +82,7 @@ enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, P
 #define HB_FB 269                             /* .. KNOB 4 (0 .. 100) -> the shimmer, Q15: 0 .. 0.82 */
 #define PF_TOP (63 << 8)                      /* filter cutoff index, Q8 (PF_SVF): the LPF's open end */
 #define PF_LOW (14 << 8)                      /* .. the LPF sweep's end, the HPF sweep's (and K1's) top */
-enum { BM_NONE, BM_LOOP, BM_TAPE, BM_FRZ, BM_HARM };
+enum { BM_NONE, BM_LOOP, BM_TAPE, BM_FRZ, BM_HARM, BM_DJ };
 #define FL_LEN 356u                           /* FLANGER: its line's frames (8.1 ms: FL_MAX + 2) */
 #define FL_MIN 22u                            /* .. the delay's sweep, samples: 0.5 .. 8 ms */
 #define FL_MAX 353u
@@ -75,14 +90,16 @@ enum { BM_NONE, BM_LOOP, BM_TAPE, BM_FRZ, BM_HARM };
 #define PH_ST 4u                              /* PHASER: all-pass stages a side (two notches, the classic pedal's) */
 #define PH_FB 13107                           /* .. the feedback, Q15: 0.4 */
 #define THR_SLOPE 64                          /* REV / ECHO THROW: the sends' glide a sample, Q15 (11.6 ms end to end) */
+#define DJ_BASE 2u                            /* DJ LOOP LIVE: the taps' shortest delay, samples */
+#define DJ_SLEW 64                            /* DJ LOOP: the speed's glide a sample, Q16 (1x in 23 ms) */
 #define THR_FB 22938                          /* ECHO THROW: the delay's feedback while held at least this, Q15 (0.7) */
 
 /* the white keys' effects by default (1.1.5's ten, then FLANGER and PHASER, 1.5.1's REV THROW and ECHO THROW on D5
- * and E5; PF_N: none) */
+ * and E5, Argo 1.8.5's DJ LOOP on F5; PF_N: none) */
 static const uint8_t PF_DEF[PF_KEYS] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN,
-                                        PF_FLG, PF_PHS, PF_RTHR, PF_ETHR, PF_N, PF_N};
+                                        PF_FLG, PF_PHS, PF_RTHR, PF_ETHR, PF_LOOP, PF_N};
 static volatile uint8_t perf_map[PF_KEYS] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP,
-                                             PF_ODN, PF_FLG, PF_PHS, PF_RTHR, PF_ETHR, PF_N, PF_N};
+                                             PF_ODN, PF_FLG, PF_PHS, PF_RTHR, PF_ETHR, PF_LOOP, PF_N};
                                       /* main: white key p's effect (PF_N none), from the settings (ui_layer.c) */
 static volatile uint8_t perf_remap;   /* main: perf_map changed (seq.c: a key held takes its new effect) */
 
@@ -91,6 +108,7 @@ static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes 
 static volatile uint8_t kb_lock;      /* main: a layer locked open (#83, no button held): 1 keys are the layer's, 2 FX's */
 static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (the others muted as by a black key) */
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */
+static volatile int8_t perf_dj_k[3];  /* main: DJ LOOP's SPEED -100..100 (KNOB 1), LENGTH 0..100 (KNOB 3) and MODE (KNOB 2: 0 LOOP, 100 LIVE) while it plays, 0 = untouched */
 static volatile int8_t perf_k[4];     /* main: the knob macros, 0 = untouched: FILTER -100..100 (- LPF, + HPF),
                                        * CRUSH 0..100, THROW 0..100, DEPTH cut 0..100 (the buffer effects' level) */
 static volatile uint32_t kb_layer;    /* ISR: the keys held that are the layer's, a bit per key */
@@ -129,6 +147,10 @@ static struct {
     uint32_t tv, dv, tpos;             /* TAPE: speed Q16, its step, read position Q16 frames */
     uint32_t gp[2], gs[2];             /* FREEZE: grain positions (samples), starts (frames) */
     uint32_t hph, hinc;                /* OCT UP / DN: tap A's place in the sweep (Q32), its step a sample */
+    uint32_t dpos, dlen;               /* DJ LOOP: the read position (Q16 samples into the loop), the loop's length now */
+    int32_t dstep, dtgt;               /* .. the speed (Q16, 65536 = 1x, negative backwards) and what KNOB 1 asks for */
+    int32_t dinc;                      /* .. LIVE: the taps' step in the sweep a sample (Q32 cycles), (1 - speed) / window */
+    uint8_t dsw;                       /* .. LOOP <-> LIVE asked: the share fades to the live mix first, then the other starts */
     int32_t hfb;                       /* .. the shimmer now, Q15 (glides to KNOB 4's a block at a time) */
     int32_t w, tw, hl, hr;             /* the buffer's share and its target, Q15; the first of a pair */
     /* the filters, CRUSH, THROW, mutes */
@@ -224,6 +246,24 @@ static uint32_t perf_pick(uint32_t a)
     return best;
 }
 
+/* DJ LOOP is the buffer effect playing: KNOB 1 is its SPEED, KNOB 3 its LENGTH (the UI: perf_dj_k, not perf_k) */
+static int perf_dj_on(void) { return perf_pick(perf_act) == PF_LOOP; }
+
+/* DJ LOOP: KNOB 3 (0 .. 100) -> the loop's length in samples: 16384 (371 ms) at 0, halved each quarter of the knob, 1024
+ * (23 ms) at 100, straight between (even: the buffer holds frame pairs) */
+static uint32_t perf_dj_len(int32_t k)
+{
+    uint32_t v = (uint32_t)clamp(k, 0, 100) * 4u, b = PB_MAX >> (v / 100u);
+    return (b - (b >> 1) * (v % 100u) / 100u) & ~1u;
+}
+/* DJ LOOP: KNOB 1 (-100 .. 100) -> the speed, Q16: 0 (untouched) normal; to the left through stopped (-50, exactly 0) to
+ * backwards (-100, exactly -1x); to the right up to 2x */
+static int32_t perf_dj_speed(int32_t k)
+{
+    k = clamp(k, -100, 100);
+    return k <= 0 ? 65536 + k * 65536 / 50 : 65536 + k * 65536 / 100;
+}
+
 static void perf_buf_start(uint32_t e)
 {
     if (!sl_lent) {
@@ -249,6 +289,15 @@ static void perf_buf_start(uint32_t e)
         pf.hph = 0;
         pf.hinc = e == PF_OUP ? 0u - (1u << 21) : 1u << 20;   /* the delay: -1 / +0.5 sample a sample */
         pf.hfb = 0;
+    } else if (e == PF_LOOP) {                  /* (wr: frames recorded, rp: samples, len: the loop's) */
+        pf.mode = BM_DJ;
+        pf.len = perf_dj_len(perf_dj_k[1]);
+        pf.state = perf_dj_k[2] >= 50 ? 2u : 0u;        /* 0 recording, 1 looping, 2 LIVE */
+        pf.dlen = pf.state == 2u ? pf.len >> 2 : pf.len;
+        pf.dstep = pf.dtgt = perf_dj_speed(perf_dj_k[0]);
+        pf.dpos = pf.wr = pf.rp = pf.odd = 0;
+        pf.dinc = 0;
+        pf.dsw = 0;
     } else if (e == PF_FRZ) {
         pf.mode = BM_FRZ;
         pf.gp[0] = 0;
@@ -541,6 +590,100 @@ static __attribute__((noinline)) void perf_harm(int32_t l, int32_t r, int32_t *y
     *yr = r + (r >> 3) + ((sr_ * 45875) >> 15);
 }
 
+static inline uint32_t pf_tri(uint32_t q);        /* (FLANGER's triangle, below) */
+/* DJ LOOP LIVE: the tap at sweep place ph (Q32 cycles), its delay ph * window + DJ_BASE, both channels (as stored: half the
+ * level); the live end of the delay line when it has not that much in it yet */
+static inline void dj_tap(uint32_t ph, uint32_t L, int32_t *l, int32_t *r)
+{
+    uint32_t d = (ph >> 16) * L + (DJ_BASE << 16), di = d >> 16;
+    int32_t f = (int32_t)((d >> 1) & 0x7FFFu);
+    const int16_t *p, *q;
+    if (di + 2u > pf.rp)
+        di = pf.rp > 2u ? pf.rp - 2u : 0u;
+    p = &sl_buf[0][0] + 2u * ((pf.wr - 1u - di) & (PB_FRAMES - 1u));
+    q = &sl_buf[0][0] + 2u * ((pf.wr - 2u - di) & (PB_FRAMES - 1u));
+    *l = p[0] + (((q[0] - p[0]) * f) >> 15);
+    *r = p[1] + (((q[1] - p[1]) * f) >> 15);
+}
+/* DJ LOOP LIVE on one sample: the live mix into the delay line, read by two taps half a sweep apart (a triangle's share
+ * each: zero where its delay jumps), the sweep moving by (1 - speed) a sample; at exactly 1x the live mix itself (the
+ * share of the taps grows over the first 5 % away from it), faded out as the speed nears 0. noinline, as perf_harm */
+static __attribute__((noinline)) int perf_dj_live(int32_t l, int32_t r, int32_t *yl, int32_t *yr)
+{
+    uint32_t ph = pf.dpos, L = pf.dlen, wa;
+    int32_t st = pf.dstep, al, ar, bl, br, sl_, sr_, g, ge;
+    pb_put(pf.wr, l >> 1, r >> 1);                  /* (stored at half: headroom, as the loop's frames) */
+    pf.wr++;
+    if (pf.rp < PB_FRAMES)
+        pf.rp++;
+    pf.dstep = st += clamp(pf.dtgt - st, -DJ_SLEW, DJ_SLEW);
+    dj_tap(ph, L, &al, &ar);
+    dj_tap(ph + 0x80000000u, L, &bl, &br);
+    wa = pf_tri(ph) >> 1;                           /* A's share, Q15 */
+    sl_ = (al * (int32_t)wa + bl * (int32_t)(32768u - wa)) >> 15;
+    sr_ = (ar * (int32_t)wa + br * (int32_t)(32768u - wa)) >> 15;
+    g = (st < 0 ? -st : st) << 1;                   /* stopped: out; full from 1/4 x up */
+    if (g > 32768)
+        g = 32768;
+    ge = (65536 - st < 0 ? st - 65536 : 65536 - st) * 10;   /* the taps' share: 0 at 1x, all from 0.05 away */
+    if (ge > 32768)
+        ge = 32768;
+    sl_ = mulq16(sl_, (uint32_t)g << 1) * 2;        /* (x2: stored at half; mulq16: a factor up to 1.0) */
+    sr_ = mulq16(sr_, (uint32_t)g << 1) * 2;
+    *yl = l + mulq16(sl_ - l, (uint32_t)ge << 1);
+    *yr = r + mulq16(sr_ - r, (uint32_t)ge << 1);
+    pf.dpos = ph + (uint32_t)pf.dinc;
+    return 1;
+}
+
+/* DJ LOOP on one sample: recording for LENGTH, then the loop read at the speed's step (linear between samples, windowed
+ * at both ends, faded out as the speed nears 0). Returns 1 once there is a loop to mix in. noinline, as perf_harm */
+static __attribute__((noinline)) int perf_dj(int32_t l, int32_t r, int32_t *yl, int32_t *yr)
+{
+    uint32_t L = pf.dlen, p, p1, e, lq;
+    int32_t al, ar, bl, br, f, g, st = pf.dstep, pos;
+    if (pf.state == 2u)
+        return perf_dj_live(l, r, yl, yr);
+    if (!pf.state) {                                /* the first pass: live, recorded (rp: samples recorded) */
+        pf.wr = pb_rec(pf.wr, l, r);
+        if (++pf.rp >= pf.len) {
+            pf.state = 1;
+            pf.dpos = 0;
+        }
+        return 0;
+    }
+    if (!L || L > pf.len)
+        L = pf.dlen = pf.len;
+    pf.dstep = st += clamp(pf.dtgt - st, -DJ_SLEW, DJ_SLEW);
+    lq = L << 16;
+    if (pf.dpos >= lq)                              /* (the loop got shorter under it) */
+        pf.dpos %= lq;
+    p = pf.dpos >> 16;
+    p1 = p + 1u < L ? p + 1u : 0u;
+    f = (int32_t)((pf.dpos >> 8) & 255u);
+    pb_at(p, pf.wr, &al, &ar);
+    pb_at(p1, pf.wr, &bl, &br);
+    al += ((bl - al) * f) >> 8;
+    ar += ((br - ar) * f) >> 8;
+    e = L - 1u - p;                                 /* the loop's ends fade over SL_RAMP: no click at the seam */
+    if (p < e)
+        e = p;
+    g = (st < 0 ? -st : st) << 1;                   /* stopped: out (a held sample is DC); full from 1/4 x up */
+    if (g > 32768)
+        g = 32768;
+    if (e < (uint32_t)SL_RAMP)
+        g = (g * (int32_t)e) >> SL_RAMP_LOG2;
+    *yl = mulq16(al, (uint32_t)g << 1);
+    *yr = mulq16(ar, (uint32_t)g << 1);
+    pos = (int32_t)pf.dpos + st;
+    if (pos < 0)
+        pos += (int32_t)lq;
+    else if ((uint32_t)pos >= lq)
+        pos -= (int32_t)lq;
+    pf.dpos = (uint32_t)pos;
+    return 1;
+}
+
 /* the buffer effect faded out: the next one, or the buffer back. Once per effect, out of the per-sample loop
  * (noinline: its calls stay out of perf_block's loop code) */
 static __attribute__((noinline)) void perf_buf_done(void)
@@ -612,11 +755,13 @@ static inline void perf_buf(int32_t *pl, int32_t *pr)
             yr >>= 10;
             on = 1;
         }
+    } else if (pf.mode == BM_DJ) {
+        on = perf_dj(l, r, &yl, &yr);
     } else if (pf.mode == BM_HARM) {
         perf_harm(l, r, &yl, &yr);
         on = 2;                                     /* (KNOB 4 is the shimmer: the level stays full) */
     }
-    pf.tw = on && pf.src != PF_N ? on == 2 ? 32768 : 32768 - perf_k[3] * 327 : 0;
+    pf.tw = on && pf.src != PF_N && !pf.dsw ? on == 2 ? 32768 : 32768 - perf_k[3] * 327 : 0;
     pf.w += clamp(pf.tw - pf.w, -SL_SLOPE, SL_SLOPE);
     if (pf.w) {
         *pl = pf_mix(l, yl, pf.w);
@@ -750,6 +895,25 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
     hold = sh - 3u;
     if (pf.split)
         perf_switch(a);
+    if (pf.mode == BM_DJ) {                         /* DJ LOOP: LENGTH (only shorter than caught) and SPEED, live */
+        uint32_t dl = perf_dj_len(perf_dj_k[1]), live = perf_dj_k[2] >= 50;
+        if (live != (pf.state == 2u)) {             /* LOOP <-> LIVE: out to the live mix, then the other kind (another buffer) */
+            pf.dsw = 1;
+            if (!pf.w) {
+                pf.state = live ? 2u : 0u;
+                pf.wr = pf.rp = pf.odd = 0;
+                pf.dpos = 0;
+                pf.len = dl;
+                pf.dsw = 0;
+            }
+        }
+        pf.dtgt = perf_dj_speed(perf_dj_k[0]);
+        if (pf.state == 2u) {                       /* (the kind playing, not the one asked for: it fades out first) */
+            pf.dlen = dl >> 2;                      /* LIVE: the window, and the taps' step for the speed now */
+            pf.dinc = (int32_t)(((int64_t)(65536 - pf.dstep) * (int64_t)(0xFFFFFFFFu / pf.dlen)) >> 16);
+        } else
+            pf.dlen = dl < pf.len ? dl : pf.len;
+    }
     pf.hfb += clamp(perf_k[3] * HB_FB - pf.hfb, -512, 512);   /* OCT UP / DN's shimmer glides (~40 ms) */
     for (i = 0; i < n; i++) {
         int32_t l = bl[i], r = br[i];

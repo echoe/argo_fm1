@@ -168,7 +168,7 @@ static void layer_let_go(uint32_t quiet)
     if (eu.on)                                          /* (SEQ TOOLS: an open EUCLID is applied) */
         eu_close(&trk[lys.trk % NTRK], 1);
     if (ui.ly == LAYER_FX && !perf_latch_on)
-        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = perf_dj_k[0] = perf_dj_k[1] = perf_dj_k[2] = 0;
     if (lys.rp_dirty) {                                 /* REC: its settings kept, as MENU does when it closes (FX: the map) */
         lys.rp_dirty = 0;
         settings_save();                                /* (deferred while playing) */
@@ -550,9 +550,9 @@ static void rec_key(uint32_t p)
 
 /* FX: the effects' names (the message; NONE: PF_N) and the map's cells' */
 static const char *const PF_NAME[PF_NFX + 1] = {"REPEAT 1/8", "REPEAT 1/16", "REPEAT 1/32", "REVERSE", "LPF", "HPF",
-    "TAPE STOP", "FREEZE", "OCT UP", "OCT DN", "FLANGER", "PHASER", "REV THROW", "ECHO THROW", "NONE"};
+    "TAPE STOP", "FREEZE", "OCT UP", "OCT DN", "FLANGER", "PHASER", "REV THROW", "ECHO THROW", "DJ LOOP", "NONE"};
 static const char *const PF_CELL[PF_NFX] = {"1/8", "1/16", "1/32", "REV", "LPF", "HPF", "STOP", "FRZ", "OCT+", "OCT-",
-    "FLNG", "PHSR", "VERB", "ECHO"};
+    "FLNG", "PHSR", "VERB", "ECHO", "LOOP"};
 static const char W_NOTE[16] = {'F', 'G', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'D', 'E', 'F', 'G'};
 /* each pass: the map from the settings to the ISR (a change: seq.c makes a key held take its new effect) */
 static void fx_map_sync(void)
@@ -776,9 +776,19 @@ static void layer_knob(uint32_t k, int32_t s)
 {
     uint32_t l = layer_open();
     if (l == LAYER_FX) {                                /* perform.c perf_k, not recorded */
-        if (k == 3u && !perf_harm_on())
-            s = -s;                                     /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
-        perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
+        if (k < 3u && perf_dj_on()) {                   /* DJ LOOP playing: KNOB 1 its SPEED, KNOB 2 its MODE (right LIVE, left LOOP), KNOB 3 its LENGTH (shorter to the right) */
+            if (k == 1u) {
+                if (s)
+                    perf_dj_k[2] = s > 0 ? 100 : 0;
+            } else {
+                volatile int8_t *d = &perf_dj_k[k >> 1];
+                *d = (int8_t)clamp(*d + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);
+            }
+        } else {
+            if (k == 3u && !perf_harm_on())
+                s = -s;                                 /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
+            perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
+        }
     } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER */
         int16_t *vp = &trk[k].p[P_LEVEL];
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
@@ -851,7 +861,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
         if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
             perf_latched = 0;
-            perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+            perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = perf_dj_k[0] = perf_dj_k[1] = perf_dj_k[2] = 0;
             ui_message("FX ALL OFF");
         } else if (lys.l == LAYER_EDIT) {
             uint32_t ld = lys.loaded;
@@ -1241,16 +1251,31 @@ static void layer_cards(uint32_t l)
     const char *unit;
     uint32_t c;
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
-        int32_t m = perf_k[0];
-        fmt_int(val, m < 0 ? -m : m);
-        draw_column(0, "FILTER", m ? val : "OFF", m < 0 ? "LP" : m > 0 ? "HP" : "", m ? VAL(0u) : T_DIM, (m + 100) * 5,
-                    ICON_CUTOFF);
-        fmt_int(val, perf_k[1]);
-        draw_column(1, "CRUSH", perf_k[1] ? val : "OFF", perf_k[1] ? "%" : "", perf_k[1] ? VAL(1u) : T_DIM,
-                    perf_k[1] * 10, ICON_BITS);
-        fmt_int(val, perf_k[2]);
-        draw_column(2, "THROW", perf_k[2] ? val : "OFF", perf_k[2] ? "%" : "", perf_k[2] ? VAL(2u) : T_DIM,
-                    perf_k[2] * 10, ICON_DELAY);
+        int32_t m = perf_k[0], dj = perf_dj_on();
+        if (dj) {                                       /* DJ LOOP playing: KNOB 1 is its SPEED, KNOB 3 its LENGTH */
+            int32_t sp = perf_dj_speed(perf_dj_k[0]) * 100 / 65536;    /* -100 .. 200 % */
+            fmt_int(val, sp < 0 ? -sp : sp);
+            draw_column(0, "SPEED", val, sp < 0 ? "REV" : "%", VAL(0u), (sp + 100) * 10 / 3, ICON_PITCH);
+        } else {
+            fmt_int(val, m < 0 ? -m : m);
+            draw_column(0, "FILTER", m ? val : "OFF", m < 0 ? "LP" : m > 0 ? "HP" : "", m ? VAL(0u) : T_DIM, (m + 100) * 5,
+                        ICON_CUTOFF);
+        }
+        if (dj) {
+            draw_column(1, "MODE", perf_dj_k[2] >= 50 ? "LIVE" : "LOOP", "", VAL(1u), perf_dj_k[2] >= 50 ? 1000 : 0, ICON_LOOP);
+        } else {
+            fmt_int(val, perf_k[1]);
+            draw_column(1, "CRUSH", perf_k[1] ? val : "OFF", perf_k[1] ? "%" : "", perf_k[1] ? VAL(1u) : T_DIM,
+                        perf_k[1] * 10, ICON_BITS);
+        }
+        if (dj) {
+            fmt_int(val, (int32_t)((perf_dj_k[2] >= 50 ? perf_dj_len(perf_dj_k[1]) >> 2 : perf_dj_len(perf_dj_k[1])) * 1000u / 44100u));
+            draw_column(2, "LENGTH", val, "MS", VAL(2u), 1000 - perf_dj_k[1] * 10, ICON_TIME);
+        } else {
+            fmt_int(val, perf_k[2]);
+            draw_column(2, "THROW", perf_k[2] ? val : "OFF", perf_k[2] ? "%" : "", perf_k[2] ? VAL(2u) : T_DIM,
+                        perf_k[2] * 10, ICON_DELAY);
+        }
         if (perf_harm_on()) {                           /* OCT UP / DN playing: KNOB 4 is its shimmer (SHIMR) */
             fmt_int(val, perf_k[3]);
             draw_column(3, "SHIMR", perf_k[3] ? val : "OFF", perf_k[3] ? "%" : "", perf_k[3] ? VAL(3u) : T_DIM,
@@ -1309,7 +1334,7 @@ static void draw_layer(void)
     if (l == LAYER_FX)
     {
         uint32_t p;
-        sig += (perf_kill ? 0u : perf_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u +
+        sig += (perf_kill ? 0u : perf_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u + (uint32_t)perf_dj_on() * 5u + (uint32_t)(perf_dj_k[0] * 17 + perf_dj_k[1] * 19 + perf_dj_k[2] * 23) +
                fx_key_held() * 4099u;
         for (p = 0; p < PF_KEYS; p++)                   /* (the key map) */
             sig = sig * 33u + perf_map[p];

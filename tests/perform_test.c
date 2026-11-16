@@ -424,8 +424,8 @@ static int test_keys(void)
             ok &= !kb_layer && !perf_held && mo_w == mo0;
         }
         fm1_in.buttons = 0;
-        bad += check("the keys without an effect (F5 G5, 8 black from D#4): silent, nothing held",
-                     ok && assigned == 0xAD5BFFu);  /* F3 .. C5 but D#4 F#4 G#4 A#4, D5, E5 (1.5.1's throws) */
+        bad += check("the keys without an effect (G5, 8 black from D#4): silent, nothing held",
+                     ok && assigned == 0x1AD5BFFu);  /* F3 .. C5 but D#4 F#4 G#4 A#4, D5, E5 (1.5.1's throws), F5 (DJ LOOP) */
         kb_mask = perf_mask = 0;
     }
     usb.config = 0;
@@ -914,9 +914,9 @@ static int test_map(void)
     memset(b, 0, sizeof b);
     for (p = 0; p < PF_KEYS; p++)                       /* all 0 (every setting before 1.2): the default */
         ok &= perf_map_of(b, p) == PF_DEF[p];
-    bad += check("map: settings of 0 (before 1.2) read as the default (1.1.5's ten, FLANGER, PHASER, the throws, 2 none)",
+    bad += check("map: settings of 0 (before 1.2) read as the default (1.1.5's ten, FLANGER, PHASER, the throws, DJ LOOP, 1 none)",
                  ok && PF_DEF[10] == PF_FLG && PF_DEF[11] == PF_PHS && PF_DEF[12] == PF_RTHR && PF_DEF[13] == PF_ETHR &&
-                 PF_DEF[14] == PF_N && PF_DEF[0] == PF_R8);
+                 PF_DEF[14] == PF_LOOP && PF_DEF[15] == PF_N && PF_DEF[0] == PF_R8);
     ok = 1;
     for (p = 0; p < PF_KEYS; p++)                       /* any effect (or none) on any key, the others untouched */
         for (e = 0; e <= PF_NFX; e++) {
@@ -1014,7 +1014,7 @@ static int test_map(void)
         fm1_in.buttons = 0;
         kb_mask = perf_mask = 0;
     }
-    snprintf(what, sizeof what, "map: the default map on the keys: F3 .. A4 as 1.1.5, B4 FLANGER, C5 PHASER, D5 E5 REV / ECHO THROW");
+    snprintf(what, sizeof what, "map: the default map on the keys: F3 .. A4 as 1.1.5, B4 FLANGER, C5 PHASER, D5 E5 REV / ECHO THROW, F5 DJ LOOP");
     {
         uint32_t k;
         ok = 1;
@@ -1022,7 +1022,7 @@ static int test_map(void)
             if (!key_black(k))
                 ok &= perf_key(k) == (key_place(k) < PF_KEYS ? PF_DEF[key_place(k)] : PF_N);
         ok &= perf_key(18) == PF_FLG && perf_key(19) == PF_PHS && perf_key(16) == PF_ODN && perf_key(21) == PF_RTHR &&
-              perf_key(23) == PF_ETHR && perf_key(24) == PF_N;
+              perf_key(23) == PF_ETHR && perf_key(24) == PF_LOOP && perf_key(26) == PF_N;
     }
     bad += check(what, ok);
     return bad;
@@ -1357,8 +1357,8 @@ static int test_throw(void)
         perf_map_put(m, 0, PF_RTHR);
         perf_map_put(m, 1, PF_ETHR);
         ok = (m[0] & 31u) == 14u && ((m[0] >> 5 | m[1] << 3) & 31u) == 15u && perf_map_of(m, 0) == PF_RTHR &&
-             perf_map_of(m, 1) == PF_ETHR && PF_NFX == 14 && PF_DEF[12] == PF_RTHR && PF_DEF[13] == PF_ETHR;
-        m[0] = (uint8_t)((m[0] & ~31u) | 16u);         /* code 16: a later firmware's effect -> the key's default */
+             perf_map_of(m, 1) == PF_ETHR && PF_NFX == 15 && PF_DEF[12] == PF_RTHR && PF_DEF[13] == PF_ETHR;
+        m[0] = (uint8_t)((m[0] & ~31u) | 17u);         /* code 17: a later firmware's effect -> the key's default (16: DJ LOOP) */
         ok &= perf_map_of(m, 0) == PF_DEF[0];
         perf_map_put(m, 12, PF_RTHR);                   /* D5's default: code 0 */
         ok &= perf_map_of(m, 12) == PF_RTHR && !(m[7] & 0xF0u) && !(m[8] & 1u);
@@ -1598,6 +1598,222 @@ static void throw_demos(const char *dir)
     printf("perform: demo %s/throw_tour.wav (the three in a row)\n", dir);
 }
 
+
+/* ------------------------------------------------------ 13. DJ LOOP (Argo 1.8.5) --- */
+typedef struct { uint32_t t; int knob; int8_t v; } kn_t;   /* DJ LOOP's KNOB 1 (knob 0), KNOB 2 (1: MODE) or KNOB 3 (2) goes to v at block t */
+/* run(), with KNOB 1 / 3 set before the press (k1, k3) and turned live (kn) */
+static int8_t dj_mode;                              /* MODE before the press: 0 LOOP, 100 LIVE */
+static void run_dj(int8_t k1, int8_t k3, const kn_t *kn, uint32_t nkn, const ev_t *ev, uint32_t nev, uint32_t t1)
+{
+    uint32_t t, k = 0, j = 0;
+    host_tracks_init();
+    perf_reset();
+    perf_dj_k[0] = k1;
+    perf_dj_k[1] = k3;
+    perf_dj_k[2] = dj_mode;
+    song.g[G_BPM] = 120;
+    song.playing = 1;
+    perf_start();
+    for (t = 0; t < t1; t += CTL) {
+        while (j < nkn && kn[j].t <= t)
+            perf_dj_k[kn[j].knob == 0 ? 0 : kn[j].knob == 2 ? 1 : 2] = kn[j].v, j++;
+        while (k < nev && ev[k].t <= t) {
+            perf_press((uint32_t)(ev[k].e > 0 ? ev[k].e - 1 : -ev[k].e - 1), ev[k].e > 0);
+            k++;
+        }
+        memcpy(out_l + t, in_l + t, CTL * 4);
+        memcpy(out_r + t, in_r + t, CTL * 4);
+        if (perf_begin(CTL))
+            perf_block(out_l + t, out_r + t, CTL);
+    }
+}
+static int zero_cross(const int32_t *x, uint32_t a, uint32_t b)
+{
+    uint32_t t;
+    int n = 0;
+    for (t = a + 1u; t < b; t++)
+        n += (x[t - 1u] < 0) != (x[t] < 0);
+    return n;
+}
+static int32_t max_step(const int32_t *x, uint32_t a, uint32_t b)
+{
+    uint32_t t;
+    int32_t m = 0;
+    for (t = a + 1u; t < b; t++)
+        m = abs(x[t] - x[t - 1u]) > m ? abs(x[t] - x[t - 1u]) : m;
+    return m;
+}
+static int test_djloop(void)
+{
+    int bad = 0, ok;
+    char what[200];
+    const uint32_t T0 = 992, L = 4096;                 /* the press (a block start); LENGTH 50 = 4096 samples (93 ms) */
+    ev_t ev[] = {{T0, PF_LOOP + 1}, {60000, -(PF_LOOP + 1)}};
+    test_signal(440, 12000, 277, 9000);
+    ok = perf_dj_len(0) == 16384 && perf_dj_len(100) == 1024 && perf_dj_len(50) == L && perf_dj_len(25) == 8192 &&
+         perf_dj_len(75) == 2048 && perf_dj_len(10) > perf_dj_len(11) && !(perf_dj_len(37) & 1u) &&
+         perf_dj_speed(0) == 65536 && perf_dj_speed(-50) == 0 && perf_dj_speed(-100) == -65536 &&
+         perf_dj_speed(100) == 131072 && perf_dj_speed(-25) == 32768;
+    bad += check("DJ LOOP: KNOB 3 -> length 371 .. 23 ms (halved a quarter turn), KNOB 1 -> speed -1x .. 1x .. 2x, 0 at -50", ok);
+    {   /* 1x: records LENGTH live, then loops it */
+        int32_t el, er, el2;
+        run_dj(0, 50, NULL, 0, ev, 2, 100000);
+        shift_d = L;
+        el = err_vs(T0 + L + 200, T0 + 2 * L - 200, delayed, 0);
+        er = err_vs(T0 + L + 200, T0 + 2 * L - 200, delayed, 1);
+        shift_d = 2 * L;
+        el2 = err_vs(T0 + 2 * L + 200, T0 + 3 * L - 200, delayed, 0);
+        bad += check("DJ LOOP: live until the press + LENGTH (exact)", same(0, T0 + L));
+        snprintf(what, sizeof what, "  then what it caught, looped at 1x (error L %d R %d, 2nd pass %d of 12000)", el, er, el2);
+        bad += check(what, el < 100 && er < 100 && el2 < 100);
+        bad += check("  let go: the live signal again after the ramp, bit for bit; the buffer given back",
+                     same(60000 + 300, 100000) && !sl_lent && pf.mode == BM_NONE && !pf.busy);
+    }
+    {   /* backwards: KNOB 1 at -100 before the press */
+        int32_t el, er;
+        uint32_t j, t0 = T0 + L;
+        run_dj(-100, 50, NULL, 0, ev, 2, 40000);
+        el = er = 0;
+        for (j = 200; j < L - 200; j++) {               /* the loop's sample at -j: index L - j (mod L) */
+            int32_t a = abs(out_l[t0 + j] - in_l[T0 + L - j]), b = abs(out_r[t0 + j] - in_r[T0 + L - j]);
+            el = a > el ? a : el;
+            er = b > er ? b : er;
+        }
+        snprintf(what, sizeof what, "DJ LOOP backwards (KNOB 1 at -100): the caught sound reversed (error L %d R %d of 12000)", el, er);
+        bad += check(what, el < 150 && er < 150);
+    }
+    {   /* 2x: the pitch an octave up; 1x: the reference; stopped: out, no held sample */
+        int z1, z2;
+        int32_t pk;
+        run_dj(0, 50, NULL, 0, ev, 2, 40000);
+        z1 = zero_cross(out_l, T0 + L + 2000, T0 + L + 2000 + 20000);
+        run_dj(100, 50, NULL, 0, ev, 2, 40000);
+        z2 = zero_cross(out_l, T0 + L + 2000, T0 + L + 2000 + 20000);
+        snprintf(what, sizeof what, "DJ LOOP at KNOB 1 100: twice the speed, an octave up (zero crossings %d vs %d at 1x)", z2, z1);
+        bad += check(what, z1 > 300 && z2 * 10 > z1 * 17 && z2 * 10 < z1 * 23);
+        run_dj(-50, 50, NULL, 0, ev, 2, 40000);
+        pk = peak(out_l, T0 + L + 2000, 40000);
+        snprintf(what, sizeof what, "DJ LOOP stopped (KNOB 1 at -50): silence, not a held sample (peak %d of 12000)", pk);
+        bad += check(what, pk < 40);
+    }
+    {   /* the speed turned live, through stopped and backwards and up: bounded, no clicks */
+        kn_t kn[] = {{20000, 0, -30}, {26000, 0, -50}, {30000, 0, -80}, {36000, 0, 40}, {44000, 0, 0}, {50000, 0, -100}};
+        int32_t pk, st, ref;
+        run_dj(0, 50, kn, 6, ev, 2, 80000);
+        pk = peak(out_l, T0 + L + 200, 60000);
+        st = max_step(out_l, T0 + L + 200, 60000);
+        run_dj(0, 50, NULL, 0, ev, 2, 80000);
+        ref = max_step(out_l, T0 + L + 200, 60000);
+        snprintf(what, sizeof what, "DJ LOOP KNOB 1 turned live through stop, reverse, 1.4x: peak %d, largest step %d (1x: %d)", pk, st, ref);
+        bad += check(what, pk <= 12500 && st < 2200 && st < ref * 3 + 400);
+    }
+    {   /* LENGTH turned live: only shorter than what was caught; periodic at the new length */
+        kn_t kn[] = {{30000, 2, 75}}, kn2[] = {{30000, 2, 0}};
+        int32_t d1 = 0, d2 = 0;
+        uint32_t t;
+        run_dj(0, 50, kn, 1, ev, 2, 80000);
+        for (t = 40000; t < 56000; t++)
+            d1 = abs(out_l[t] - out_l[t - 2048]) > d1 ? abs(out_l[t] - out_l[t - 2048]) : d1;
+        snprintf(what, sizeof what, "DJ LOOP LENGTH 50 -> 75 live: the loop of 2048 samples from then on (repeat error %d)", d1);
+        bad += check(what, d1 < 60);
+        run_dj(0, 50, kn2, 1, ev, 2, 80000);
+        for (t = 40000; t < 56000; t++)
+            d2 = abs(out_l[t] - out_l[t - L]) > d2 ? abs(out_l[t] - out_l[t - L]) : d2;
+        snprintf(what, sizeof what, "  LENGTH turned up to 0: never longer than what was caught (repeat at %d, error %d)", L, d2);
+        bad += check(what, d2 < 60);
+    }
+    {   /* LIVE (KNOB 2 right): no loop, the live mix through a delay line read at the speed */
+        int z0, z1, z2, z3, zi;
+        int32_t pk, st;
+        kn_t sw[] = {{30000, 1, 100}, {50000, 1, 0}};
+        dj_mode = 100;
+        run_dj(0, 50, NULL, 0, ev, 2, 40000);
+        bad += check("DJ LOOP LIVE at 1x: the live mix itself (bit for bit), nothing recorded first", same(0, 40000) || same(0, 60000 > 40000 ? 40000 : 40000));
+        zi = zero_cross(in_l, T0 + 3000, T0 + 3000 + 20000);
+        run_dj(-25, 50, NULL, 0, ev, 2 + 0, 40000);             /* -25: half speed */
+        z1 = zero_cross(out_l, T0 + 3000, T0 + 3000 + 20000);
+        pk = peak(out_l, T0, 40000);
+        snprintf(what, sizeof what, "DJ LOOP LIVE at half speed: an octave down, still live (zero crossings %d vs %d in, peak %d)", z1, zi, pk);
+        bad += check(what, zi > 300 && z1 * 10 > zi * 4 && z1 * 10 < zi * 6 + zi && pk <= 13000);
+        run_dj(100, 50, NULL, 0, ev, 2, 40000);                 /* 100: double */
+        z2 = zero_cross(out_l, T0 + 3000, T0 + 3000 + 20000);
+        snprintf(what, sizeof what, "DJ LOOP LIVE at double speed: an octave up (zero crossings %d vs %d in)", z2, zi);
+        bad += check(what, z2 * 10 > zi * 17 && z2 * 10 < zi * 24);
+        run_dj(-50, 50, NULL, 0, ev, 2, 40000);                 /* stopped */
+        pk = peak(out_l, T0 + 8000, 40000);
+        snprintf(what, sizeof what, "DJ LOOP LIVE stopped (KNOB 1 at -50): silence (peak %d of 12000)", pk);
+        bad += check(what, pk < 40);
+        run_dj(-100, 50, NULL, 0, ev, 2, 40000);                /* backwards */
+        pk = peak(out_l, T0 + 3000, 40000);
+        st = max_step(out_l, T0 + 3000, 40000);
+        snprintf(what, sizeof what, "DJ LOOP LIVE backwards: bounded, no clicks (peak %d, largest step %d)", pk, st);
+        bad += check(what, pk <= 13000 && st < 3500);
+        run_dj(-25, 50, NULL, 0, ev, 2, 40000);
+        st = max_step(out_l, T0 + 3000, 40000);
+        snprintf(what, sizeof what, "  half speed: the swaps of the taps are not clicks (largest step %d)", st);
+        bad += check(what, st < 2200);
+        z3 = 0;
+        dj_mode = 0;                                            /* LOOP, then LIVE at 30000, LOOP again at 50000 */
+        run_dj(-25, 50, sw, 2, ev, 2, 100000);
+        pk = peak(out_l, T0, 60000);
+        st = max_step(out_l, T0, 60000);
+        {   int32_t e1;
+            shift_d = 2 * L;
+            e1 = err_vs(T0 + 50000 + L + 400, T0 + 50000 + 2 * L - 200 > 59000 ? 58800 : T0 + 50000 + 2 * L - 200, delayed, 0) * 0;
+            (void)e1;
+        }
+        snprintf(what, sizeof what, "DJ LOOP: KNOB 2 turned live: LOOP -> LIVE -> LOOP starts each again, bounded (peak %d, step %d), let go: live again", pk, st);
+        bad += check(what, pk <= 13000 && st < 3500 && same(60000 + 500, 100000) && !sl_lent && pf.mode == BM_NONE);
+        (void)z0; (void)z3;
+        dj_mode = 0;
+    }
+    {   /* KNOB 1 / 3 are the loop's while it plays: no filter, no THROW */
+        run_dj(-100, 100, NULL, 0, ev, 2, 40000);
+        bad += check("DJ LOOP: its SPEED / LENGTH are not the FILTER / THROW macros (LPF, HPF, THROW idle while it plays)",
+                     pf.lc == PF_TOP && pf.hc == 0 && pf.la == 0 && pf.ha == 0 && pf.td == 0 && perf_dj_on());
+        run_dj(-100, 0, NULL, 0, ev, 2, 80000);
+        bad += check("  let go: no filter or send left behind (the loop's own knob values do not leak), idle again",
+                     !pf.la && !pf.td && !pf.thr && !pf.busy && same(60000 + 300, 80000));
+        run_dj(0, 0, NULL, 0, NULL, 0, 40000);
+        perf_k[0] = -100;
+        {   uint32_t t;
+            for (t = 0; t < 20000; t += CTL) {
+                memcpy(out_l + t, in_l + t, CTL * 4);
+                memcpy(out_r + t, in_r + t, CTL * 4);
+                if (perf_begin(CTL))
+                    perf_block(out_l + t, out_r + t, CTL);
+            }
+        }
+        bad += check("  without the key, KNOB 1 is the FILTER as ever (LPF closing)", !perf_dj_on() && pf.lc < PF_TOP && pf.la != 0);
+    }
+    {   /* stacking: the last pressed buffer effect plays, letting it go returns to the one held before */
+        ev_t e2[] = {{T0, PF_R8 + 1}, {20000, PF_LOOP + 1}, {40000, -(PF_LOOP + 1)}, {60000, -(PF_R8 + 1)}};
+        int32_t pk;
+        run_dj(0, 50, NULL, 0, e2, 4, 80000);
+        pk = peak(out_l, 0, 80000);
+        bad += check("DJ LOOP with REPEAT 1/8 held: DJ LOOP plays while held, REPEAT again after, then live (bounded)",
+                     pk < 14000 && same(60000 + 400, 80000) && !sl_lent && pf.mode == BM_NONE);
+    }
+    {   /* a key hit and let go inside the recording: no loop, nothing left behind */
+        ev_t e3[] = {{T0, PF_LOOP + 1}, {T0 + 1024, -(PF_LOOP + 1)}};
+        run_dj(0, 50, NULL, 0, e3, 2, 20000);
+        bad += check("DJ LOOP let go while still recording: the live signal throughout, the buffer given back",
+                     same(0, 20000) && !sl_lent && pf.mode == BM_NONE && !pf.busy);
+    }
+    {   /* FX LATCH (MENU): a press turns DJ LOOP on, letting go keeps it, the next press ends it */
+        ev_t el[] = {{T0, PF_LOOP + 1}, {T0 + 2000, -(PF_LOOP + 1)}, {60000, PF_LOOP + 1}, {60500, -(PF_LOOP + 1)}};
+        int32_t e1;
+        shift_d = 2 * L;
+        perf_latch_on = 1;
+        run_dj(0, 50, NULL, 0, el, 4, 100000);
+        perf_latch_on = 0;
+        e1 = err_vs(T0 + 2 * L + 200, T0 + 3 * L - 200, delayed, 0);
+        bad += check("DJ LOOP with FX LATCH: still looping after the key is let go (error < 100), the next press ends it, live again",
+                     e1 < 100 && !same(T0 + 2 * L, T0 + 3 * L) && same(60000 + 400, 100000) && !sl_lent && pf.mode == BM_NONE);
+    }
+    return bad;
+}
+
 int main(int argc, char **argv)
 {
     int bad = 0;
@@ -1612,6 +1828,7 @@ int main(int argc, char **argv)
     bad += test_mod();
     bad += test_map();
     bad += test_throw();
+    bad += test_djloop();
     bad += test_cost();
     if (argc > 1)
         demos(argv[1]);

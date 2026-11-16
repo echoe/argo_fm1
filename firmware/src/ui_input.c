@@ -1734,7 +1734,7 @@ static void ui_input(void)
     if (!layer_allowed()) {
         perf_kill = 1;                                  /* (effects off until their keys are let go) */
         perf_latched = 0;                               /* (FX LATCH: the latched ones and the macros off) */
-        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = perf_dj_k[0] = perf_dj_k[1] = perf_dj_k[2] = 0;
     }
     else if (!kb_layer)
         perf_kill = 0;
