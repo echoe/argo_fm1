@@ -1609,14 +1609,14 @@ static void run_dj(int8_t k1, int8_t k3, const kn_t *kn, uint32_t nkn, const ev_
     host_tracks_init();
     perf_reset();
     perf_dj_k[0] = k1;
-    perf_dj_k[1] = k3;
+    perf_dj_k[1] = (int8_t)-k3;                        /* (LENGTH: the knob's distance from its right end) */
     perf_dj_k[2] = dj_mode;
     song.g[G_BPM] = 120;
     song.playing = 1;
     perf_start();
     for (t = 0; t < t1; t += CTL) {
         while (j < nkn && kn[j].t <= t)
-            perf_dj_k[kn[j].knob == 0 ? 0 : kn[j].knob == 2 ? 1 : 2] = kn[j].v, j++;
+            perf_dj_k[kn[j].knob == 0 ? 0 : kn[j].knob == 2 ? 1 : 2] = (int8_t)(kn[j].knob == 2 ? -kn[j].v : kn[j].v), j++;
         while (k < nev && ev[k].t <= t) {
             perf_press((uint32_t)(ev[k].e > 0 ? ev[k].e - 1 : -ev[k].e - 1), ev[k].e > 0);
             k++;

@@ -13,7 +13,7 @@
  * (THR_SLOPE). Let go, the sends are the tracks' own again and what the buses hold rings out. The buses are the song's
  * (no RAM of their own); the tracks' REV / DLY / FDBK values are never touched (nothing saved, nothing recorded).
  * DJ LOOP (Argo 1.8.5, after the SP-404's DJFX LOOPER; F5 by default): holding the key records the live mix for LENGTH
- * (KNOB 3 while it plays, 371 ms at 0 down to 23 ms at 100, read when the key goes down), then loops what it caught; let go, the live
+ * (KNOB 3 while it plays: 371 ms at its right end, 23 ms at its left, read when the key goes down), then loops what it caught; let go, the live
  * mix is back. While it plays KNOB 1 is its SPEED (not FILTER: turned left of the middle from normal through stopped
  * to backwards, right of it up to double: a record under the hand, the pitch following) and KNOB 3 its LENGTH, live
  * (not THROW; the loop can only get shorter than what was caught), DEPTH (KNOB 4) stays the level. The two keep their
@@ -108,7 +108,7 @@ static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes 
 static volatile uint8_t kb_lock;      /* main: a layer locked open (#83, no button held): 1 keys are the layer's, 2 FX's */
 static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (the others muted as by a black key) */
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */
-static volatile int8_t perf_dj_k[3];  /* main: DJ LOOP's SPEED -100..100 (KNOB 1), LENGTH 0..100 (KNOB 3) and MODE (KNOB 2: 0 LOOP, 100 LIVE) while it plays, 0 = untouched */
+static volatile int8_t perf_dj_k[3];  /* main: DJ LOOP's SPEED -100..100 (KNOB 1), LENGTH -100..0 (KNOB 3: 0 the longest, left shorter) and MODE (KNOB 2: 0 LOOP, 100 LIVE) while it plays, 0 = untouched */
 static volatile int8_t perf_k[4];     /* main: the knob macros, 0 = untouched: FILTER -100..100 (- LPF, + HPF),
                                        * CRUSH 0..100, THROW 0..100, DEPTH cut 0..100 (the buffer effects' level) */
 static volatile uint32_t kb_layer;    /* ISR: the keys held that are the layer's, a bit per key */
@@ -249,7 +249,7 @@ static uint32_t perf_pick(uint32_t a)
 /* DJ LOOP is the buffer effect playing: KNOB 1 is its SPEED, KNOB 3 its LENGTH (the UI: perf_dj_k, not perf_k) */
 static int perf_dj_on(void) { return perf_pick(perf_act) == PF_LOOP; }
 
-/* DJ LOOP: KNOB 3 (0 .. 100) -> the loop's length in samples: 16384 (371 ms) at 0, halved each quarter of the knob, 1024
+/* DJ LOOP: the LENGTH knob's distance from its right end (0 .. 100: KNOB 3 is -100 .. 0) -> the loop's length in samples: 16384 (371 ms) at 0, halved each quarter of the knob, 1024
  * (23 ms) at 100, straight between (even: the buffer holds frame pairs) */
 static uint32_t perf_dj_len(int32_t k)
 {
@@ -291,7 +291,7 @@ static void perf_buf_start(uint32_t e)
         pf.hfb = 0;
     } else if (e == PF_LOOP) {                  /* (wr: frames recorded, rp: samples, len: the loop's) */
         pf.mode = BM_DJ;
-        pf.len = perf_dj_len(perf_dj_k[1]);
+        pf.len = perf_dj_len(-perf_dj_k[1]);
         pf.state = perf_dj_k[2] >= 50 ? 2u : 0u;        /* 0 recording, 1 looping, 2 LIVE */
         pf.dlen = pf.state == 2u ? pf.len >> 2 : pf.len;
         pf.dstep = pf.dtgt = perf_dj_speed(perf_dj_k[0]);
@@ -896,7 +896,7 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
     if (pf.split)
         perf_switch(a);
     if (pf.mode == BM_DJ) {                         /* DJ LOOP: LENGTH (only shorter than caught) and SPEED, live */
-        uint32_t dl = perf_dj_len(perf_dj_k[1]), live = perf_dj_k[2] >= 50;
+        uint32_t dl = perf_dj_len(-perf_dj_k[1]), live = perf_dj_k[2] >= 50;
         if (live != (pf.state == 2u)) {             /* LOOP <-> LIVE: out to the live mix, then the other kind (another buffer) */
             pf.dsw = 1;
             if (!pf.w) {

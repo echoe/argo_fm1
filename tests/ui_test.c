@@ -1591,9 +1591,18 @@ static int test_categories(void)
     return bad;
 }
 
+static uint32_t pal_index(const char *name)             /* a palette by its name: the table grows (Argo's ARGO is the second) */
+{
+    uint32_t i;
+    for (i = 0; i < UI_NPALETTES; i++)
+        if (str_eq(UI_PALETTES[i].name, name))
+            return i;
+    return 0;
+}
 static int test_display_preferences(void)
 {
     int bad = 0, k;
+    uint32_t pp = pal_index("PAPER");
     track_t sounds[NTRK];
     uint16_t before[240 * 240];
     ui_power_on();
@@ -1602,15 +1611,16 @@ static int test_display_preferences(void)
     ui.menu_sel = MI_COLOR;
     ui.force = 1; ui_draw();
     memcpy(before, host_screen, sizeof before);
-    settings.palette = 5; palette_set(5);
+    settings.palette = (uint8_t)(pp - 1u); palette_set(pp - 1u);
     press(B_OCTUP);
     bad += check("COLOR OCT+ previews the next palette (PAPER, light) without closing the menu",
-                 settings.palette == 6 && T_BG == UI_PALETTES[6].c1 && ux.light && ui.menu == 1 && !song.octave &&
+                 settings.palette == pp && T_BG == UI_PALETTES[pp].c1 && ux.light && ui.menu == 1 && !song.octave &&
                  memcmp(before, host_screen, sizeof before) && !memcmp(sounds, trk, sizeof sounds));
     turn(EN_K1, 1);
     bad += check("COLOR KNOB 1 steps on to HI-CON, NIGHT (#50: true black), MONO (1.0.2: black and white), then wraps to GREY",
-                 settings.palette == 7 && (turn(EN_K1, 1), settings.palette == 8u) && T_BG == 0u &&
-                 str_eq(UI_PALETTES[8].name, "NIGHT") && (turn(EN_K1, 1), settings.palette == UI_BW_INDEX) &&
+                 settings.palette == pp + 1u && str_eq(UI_PALETTES[pp + 1u].name, "HI-CON") &&
+                 (turn(EN_K1, 1), settings.palette == pp + 2u) && T_BG == 0u &&
+                 str_eq(UI_PALETTES[pp + 2u].name, "NIGHT") && (turn(EN_K1, 1), settings.palette == UI_BW_INDEX) &&
                  str_eq(UI_PALETTES[UI_BW_INDEX].name, "MONO") && T_BG == 0u && T_TEXT == 0xFFFFu &&
                  (turn(EN_K1, 1), settings.palette == UI_GREY_INDEX) && str_eq(UI_PALETTES[UI_GREY_INDEX].name, "GREY"));
     settings.lowcut = 2;

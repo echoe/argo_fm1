@@ -782,7 +782,7 @@ static void layer_knob(uint32_t k, int32_t s)
                     perf_dj_k[2] = s > 0 ? 100 : 0;
             } else {
                 volatile int8_t *d = &perf_dj_k[k >> 1];
-                *d = (int8_t)clamp(*d + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);
+                *d = (int8_t)clamp(*d + accel(EN_K1 + k, s, k ? 100 : 200), -100, k ? 0 : 100);   /* (LENGTH: 0 at the right end, the longest) */
             }
         } else {
             if (k == 3u && !perf_harm_on())
@@ -1269,8 +1269,8 @@ static void layer_cards(uint32_t l)
                         perf_k[1] * 10, ICON_BITS);
         }
         if (dj) {
-            fmt_int(val, (int32_t)((perf_dj_k[2] >= 50 ? perf_dj_len(perf_dj_k[1]) >> 2 : perf_dj_len(perf_dj_k[1])) * 1000u / 44100u));
-            draw_column(2, "LENGTH", val, "MS", VAL(2u), 1000 - perf_dj_k[1] * 10, ICON_TIME);
+            fmt_int(val, (int32_t)((perf_dj_k[2] >= 50 ? perf_dj_len(-perf_dj_k[1]) >> 2 : perf_dj_len(-perf_dj_k[1])) * 1000u / 44100u));
+            draw_column(2, "LENGTH", val, "MS", VAL(2u), 1000 + perf_dj_k[1] * 10, ICON_TIME);
         } else {
             fmt_int(val, perf_k[2]);
             draw_column(2, "THROW", perf_k[2] ? val : "OFF", perf_k[2] ? "%" : "", perf_k[2] ? VAL(2u) : T_DIM,
