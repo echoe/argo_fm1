@@ -35,7 +35,7 @@
 .site-top nav a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--fg); }
 @media (max-width: 520px) { .site-top nav { margin-left: 0; width: 100%; } }
 </style></head>
-<body><header class="site-top"><a class="brand" href="../../">Argo</a><nav aria-label="Argo"><a href="../../webapp/installer/" aria-current="page">Install</a><a href="../../webapp/editor/">Editor</a><a href="../../manual/">Manual</a><a href="https://joakimeriksson.github.io/fm1-emu/?fw=local&amp;mhz=100">Emulator</a><a href="https://github.com/echoe/argo_fm1">Source</a></nav></header>
+<body><header class="site-top"><a class="brand" href="../../">Argo</a><nav aria-label="Argo"><a href="../../webapp/installer/" aria-current="page">Install</a><a href="../../webapp/editor/">Editor</a><a href="../../manual/">Manual</a><a href="https://joakimeriksson.github.io/fm1-emu/?fw=argo&amp;mhz=100">Emulator</a><a href="https://github.com/echoe/argo_fm1">Source</a></nav></header>
 <main>
   <button class="lang" id="lang"></button>
   <h1>Argo</h1>
@@ -810,7 +810,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.8.4", "product": "FM-1_050", "pkg": "../../firmware/argo-1.8.4.fwsc"};
+const meta = {"version": "1.8.5", "product": "FM-1_050", "pkg": "../../firmware/argo-1.8.5.fwsc"};
 
 let writing = false, stock = null, stockFileEpoch = 0;
 const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
