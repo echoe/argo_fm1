@@ -58,7 +58,11 @@ static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};      /* SL_OFF .. SL_STUT (slicer.c; a stored 3, the retired GRAIN, loads as OFF: param_fit) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 /* the INSERT's types (1.5, fx.c IT_*; append-only: stored). Its three values A B C mean what the type says (ins_desc) */
-static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "GRAIN", "TAPE"};
+static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR", "GRAIN", "TAPE", "COMB"};
+/* COMB: FDBK, -96 .. +96 % in 33 even parts (fx.c ins_comb; 64 is 0): a negative one gives the odd harmonics only */
+static const char *const N_ICFB[] = {"-96", "-90", "-84", "-78", "-72", "-66", "-60", "-54", "-48", "-42", "-36", "-30", "-24",
+                                     "-18", "-12", "-6", "0", "+6", "+12", "+18", "+24", "+30", "+36", "+42", "+48", "+54",
+                                     "+60", "+66", "+72", "+78", "+84", "+90", "+96", 0};
 /* CRUSH: BITS 1..16 and RATE (the held sample's rate, fx.c INS_HOLD) over the range in 16 even parts (0-terminated) */
 static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                                       "16", 0};
@@ -197,21 +201,23 @@ static const param_desc_t TP[P_COUNT] = {
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
  * LPF, the swept ones RATE DEPTH FDBK, GRAIN SIZE PITCH SPRAY, TAPE DRIVE WOW TONE; OFF TP's own */
 #define PU(l, f, df, n, u) {l, f, 0, 127, df, n, u}
-static const param_desc_t INS_DESC[5][3] = {
+static const param_desc_t INS_DESC[6][3] = {
     {PU("DRIVE", F_PCT, 64, 0, 0), PU("TONE", F_CUTOFF, 96, 0, 0), PU("LEVEL", F_DB, 96, 0, 0)},
     {PU("BITS", F_INT, 64, N_IBITS, 0), PU("RATE", F_INT, 96, N_IRATE, "Hz"), PU("LPF", F_CUTOFF, 96, 0, 0)},
     {PU("RATE", F_LFOHZ, 64, 0, 0), PU("DEPTH", F_PCT, 96, 0, 0), PU("FDBK", F_PCT, 96, 0, 0)},
     {PU("SIZE", F_INT, 64, N_ISIZE, "ms"), PU("PITCH", F_INT, 64, N_IPITCH, "st"), PU("SPRAY", F_PCT, 48, 0, 0)},
     {PU("DRIVE", F_PCT, 40, 0, 0), PU("WOW", F_PCT, 40, 0, 0), PU("TONE", F_CUTOFF, 100, 0, 0)},
+    {PU("FREQ", F_CUTOFF, 64, 0, 0), PU("FDBK", F_INT, 96, N_ICFB, "%"), PU("DAMP", F_CUTOFF, 96, 0, 0)},
 };
 #undef PU
 static const param_desc_t *ins_desc(int32_t type, uint32_t k)
 {
     if (type <= 0 || type >= (int32_t)NELEM(N_ITYPE))
         return &TP[P_IA + k];
-    return &INS_DESC[type < 5 ? 0 : type == 5 ? 1 : type == 9 ? 3 : type == 10 ? 4 : 2][k];   /* (IT_SOFT .. IT_FUZZ, IT_CRUSH, the swept ones, IT_GRAIN, IT_TAPE) */
+    return &INS_DESC[type < 5 ? 0 : type == 5 ? 1 : type == 9 ? 3 : type == 10 ? 4 : type == 11 ? 5 : 2][k];   /* (IT_SOFT .. IT_FUZZ, IT_CRUSH, the swept ones, IT_GRAIN, IT_TAPE) */
 }
 
+static const char *const N_CMODE[] = {"I", "II", "I+II", 0};   /* the chorus: the Juno-60 / 106 switches (G_CRATE) */
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 120),
     [G_SWING] = PD("SWG", F_PCT, 0, 100, 0),
@@ -223,8 +229,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DMIX] = PD("MIX", F_PCT, 0, 127, 90),
     [G_RSIZE] = PD("SIZE", F_PCT, 0, 127, 90),
     [G_RDAMP] = PD("DAMP", F_PCT, 0, 127, 60),
-    [G_CRATE] = PD("CRT", F_LFOHZ, 0, 127, 40),
-    [G_CDEPTH] = PD("CDP", F_PCT, 0, 127, 60),
+    [G_CRATE] = {"RATE", F_INT, 0, 127, 64, N_CMODE, 0},   /* Argo: the Juno's three chorus switches (fx.c fx_buses), three parts of the range: I (0.5 Hz), II (0.8 Hz), I+II (9.75 Hz); a stored RATE of before is a value of 0..127 as ever */
+    [G_CDEPTH] = PD("DEPTH", F_PCT, 0, 127, 60),   /* Argo: how far the delay swings: 64 the Juno's own */
     /* G_MIDI, G_SYNC, G_INFO: the old SYSTEM page's (gone in 1.2), on no page: MIDI's value was never read (its card
      * showed the USB state), SYNC was a placeholder, CPU a reading; the USB state and the CPU load are MENU > SYSTEM >
      * INFO's now (ui_menu.c). Kept: the ids and G_COUNT are fixed by the formats and the protocol */

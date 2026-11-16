@@ -973,7 +973,7 @@ static void sd2_turn(uint32_t slot, int32_t steps)
     if (slot == 0u) {
         int32_t np = (int32_t)ENGINES[eng_idx(t->eng_req)]->npresets, nu = (int32_t)ev_pset_nuser(t), cur, nw;
         int16_t v;
-        int has = motion_lock_get(t, i, MOTION_PSET, &v);
+        int has = motion_pset_get(t, i, &v);                /* (Argo: 1 a LOCK, 2 AUTO: the knob keeps the kind) */
         if (!np) {
             ui_message("NO PRESETS");
             return;
@@ -986,7 +986,7 @@ static void sd2_turn(uint32_t slot, int32_t steps)
         step_undo_take(t, 0x4000u | slot << 6 | i);
         if (!nw)
             motion_delete_event(t, i, MOTION_PSET);
-        else if (motion_set_lock(t, i, MOTION_PSET, ev_pset_val(t, nw - 1)))
+        else if (motion_put(t, i, MOTION_PSET, ev_pset_val(t, nw - 1), has == 2 ? 0u : MOTION_LOCK))
             ui_message("AUTOMATION FULL");
         motion_undo_done(t);
         return;
@@ -1012,7 +1012,7 @@ static void sd2_reset(void)
     track_t *t = TSEL;
     step_t *st = &t->step[ui.cursor];
     int16_t v;
-    if (!motion_lock_get(t, ui.cursor, MOTION_PSET, &v) && !(st->flags & (SF_ACCENT | SF_SLIDE))) {
+    if (!motion_pset_get(t, ui.cursor, &v) && !(st->flags & (SF_ACCENT | SF_SLIDE))) {
         ui_message("NOTHING TO RESET");
         return;
     }
@@ -1734,7 +1734,7 @@ static void ui_input(void)
     if (!layer_allowed()) {
         perf_kill = 1;                                  /* (effects off until their keys are let go) */
         perf_latched = 0;                               /* (FX LATCH: the latched ones and the macros off) */
-        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
+        perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = perf_dj_k[0] = perf_dj_k[1] = perf_dj_k[2] = 0;
     }
     else if (!kb_layer)
         perf_kill = 0;

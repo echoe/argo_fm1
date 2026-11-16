@@ -336,8 +336,8 @@ static const char *ev_act_name(void)
         return "CLEAR";
     if (k == EVK_ADD)
         return ui.ev_id != EV_VEL ? "ADD" : ui.ev_vel ? "HIDE" : "SHOW";
-    if (k != EVK_REC || MOTION_ID(&motion.event[c & 0xFFu]) == MOTION_PSET)
-        return "--";                                   /* (a preset is only ever a lock) */
+    if (k != EVK_REC)
+        return "--";
     return (motion.event[c & 0xFFu].param & MOTION_LOCK) ? "AUTO" : "LOCK";   /* what OCT+ turns it into */
 }
 static int ev_act_ready(void)
@@ -554,10 +554,6 @@ static void ev_oct(void)
     if (k == EVK_REC) {
         const motion_event_t e = motion.event[c & 0xFFu];
         uint32_t lock = !(e.param & MOTION_LOCK);
-        if (MOTION_ID(&e) == MOTION_PSET) {
-            ui_message("PRESET IS A LOCK");
-            return;
-        }
         motion_undo_take(t, 0);
         (void)motion_put(t, e.place & 63u, MOTION_ID(&e), e.value, lock ? MOTION_LOCK : 0u);
         motion_undo_done(t);

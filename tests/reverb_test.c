@@ -66,6 +66,7 @@ static int32_t noise(int32_t amp)
 static int16_t ref_dly[DLY_LEN], ref_cho[CHO_LEN], ref_comb[1116 + 1188 + 1277 + 1356], ref_ap[556 + 441];
 static struct {
     uint32_t dly_w, cho_w, cho_ph;
+    int32_t cho_dep, cho_ilp, cho_olp[2];                       /* (Argo: the Juno chorus's state) */
     int32_t dly_lp;
     uint16_t comb_i[4], ap_i[2];
     int32_t comb_lp[4];
@@ -76,19 +77,30 @@ static void ref_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t size = 25000 + song.g[G_RSIZE] * 50, damp = 32767 - song.g[G_RDAMP] * 200;
-    int32_t cdepth = song.g[G_CDEPTH] * 6;
-    uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+    uint32_t cmode = (uint32_t)clamp(song.g[G_CRATE], 0, 127) * 3u >> 7, cinc = CHO_INC[cmode];
+    int32_t cdep = CHO_SWING[cmode] * clamp(song.g[G_CDEPTH], 0, 127) / 64;
+    if (cdep > 140 * 256)
+        cdep = 140 * 256;
     for (i = 0; i < n; i++) {
-        int32_t y = 0, x, r, a;
-        ref_cho[rf.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
+        int32_t y = 0, x, r, a, tri, off, yl, yr, f, c0, c1;
+        uint32_t ri;
+        rf.cho_ilp += mulq15((cho_in[i] >> 1) - rf.cho_ilp, CHO_LPK);       /* (the Juno chorus, as fx.c, in this copy's line) */
+        ref_cho[rf.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(rf.cho_ilp, -32768, 32767);
+        rf.cho_dep += clamp(cdep - rf.cho_dep, -64, 64);
         rf.cho_ph += cinc;
-        r = (400 << 8) + ((osc_sine(rf.cho_ph) + 32768) * cdepth >> 8);
-        {
-            uint32_t ri = (uint32_t)r >> 8;
-            int32_t f = r & 255, c0 = ref_cho[(rf.cho_w - ri) & (CHO_LEN - 1u)];
-            int32_t c1 = ref_cho[(rf.cho_w - ri - 1u) & (CHO_LEN - 1u)];
-            y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
-        }
+        tri = (int32_t)pf_tri(rf.cho_ph) - 32768;
+        off = (tri * rf.cho_dep) >> 15;
+        r = CHO_CENTRE + off;
+        ri = (uint32_t)r >> 8; f = r & 255;
+        c0 = ref_cho[(rf.cho_w - ri) & (CHO_LEN - 1u)]; c1 = ref_cho[(rf.cho_w - ri - 1u) & (CHO_LEN - 1u)];
+        yl = (c0 + (((c1 - c0) * f) >> 8)) << 1;
+        r = CHO_CENTRE - off;
+        ri = (uint32_t)r >> 8; f = r & 255;
+        c0 = ref_cho[(rf.cho_w - ri) & (CHO_LEN - 1u)]; c1 = ref_cho[(rf.cho_w - ri - 1u) & (CHO_LEN - 1u)];
+        yr = (c0 + (((c1 - c0) * f) >> 8)) << 1;
+        rf.cho_olp[0] += mulq15(yl - rf.cho_olp[0], CHO_LPK);
+        rf.cho_olp[1] += mulq15(yr - rf.cho_olp[1], CHO_LPK);
+        y += (rf.cho_olp[0] + rf.cho_olp[1]) >> 1;
         rf.cho_w++;
         x = ref_dly[(rf.dly_w - dl) & (DLY_LEN - 1u)];
         rf.dly_lp += mulq15(x - rf.dly_lp, col);

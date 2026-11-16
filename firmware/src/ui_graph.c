@@ -397,7 +397,7 @@ static void graph_detail2(const track_t *t, uint16_t c)
         if (song.playing && si == t->seq_idx)
             cv_rect(x + 6, 2, 1, 114, T_ACCENT);
         y = LY[0]; h = LH[0];
-        if (all && motion_lock_get(t, si, MOTION_PSET, &pv)) {
+        if (all && motion_pset_get(t, si, &pv)) {
             int32_t bh = (ev_pset_pos(t, pv) + 1) * h / all;
             cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh), 9, bh < 2 ? 2 : bh, hi);
             if (pv < 0)
@@ -522,10 +522,33 @@ static void graph_grain(const track_t *t, uint16_t c)
         }
     }
 }
+/* COMB: the teeth of its response over four cycles of the delay (|H|^2 of the feedback comb: peaks as high as the wet sound, as
+ * deep as FDBK; a negative FDBK has its peaks between the dry ones), blended with the dry sound by MIX */
+static void graph_comb(const track_t *t, uint16_t c)
+{
+    int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy, m = ins_mixq(t->p[P_IMIX]);
+    int32_t gq = ins_comb_fb(t->p[P_IB]) >> 3, ga = gq < 0 ? -gq : gq;       /* Q12 */
+    cv_rect(PANEL_X0, cy + a, PANEL_W, 1, T_RAISE);
+    for (x = 0; x < PANEL_W; x++) {
+        uint32_t ph = (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 4u));
+        int32_t cs = osc_sine(ph + 0x40000000u);                        /* cos, Q15 */
+        int32_t den = 4096 + ((gq * gq) >> 12) - ((2 * gq * cs) >> 15), num = ((4096 - ga) * (4096 - ga)) >> 12, r, w, y;
+        r = den > 0 ? (int32_t)(((int64_t)num << 12) / den) : 4096;
+        w = (int32_t)(((int64_t)4096 * (32768 - m) + (int64_t)r * m) >> 15);
+        y = cy + a - clamp(w, 0, 4096) * 2 * a / 4096;
+        if (x)
+            cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
+        py = y;
+    }
+}
 static void graph_insert(const track_t *t, uint16_t c)
 {
     if (clamp(t->p[P_ITYPE], 0, IT_N - 1) == IT_GRAIN) {
         graph_grain(t, c);
+        return;
+    }
+    if (clamp(t->p[P_ITYPE], 0, IT_N - 1) == IT_COMB) {
+        graph_comb(t, c);
         return;
     }
     int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy, ty = clamp(t->p[P_ITYPE], 0, IT_N - 1);

@@ -1322,7 +1322,7 @@ static void draw_columns(void)
         char nb[16];
         const char *u = "";
         int16_t pv;
-        int has = motion_lock_get(TSEL, ui.cursor, MOTION_PSET, &pv), on = sd2_takes(TSEL, st);
+        int has = motion_pset_get(TSEL, ui.cursor, &pv), on = sd2_takes(TSEL, st);
         int32_t np = (int32_t)ENGINES[eng_idx(TSEL->eng_req)]->npresets, all = np + (int32_t)ev_pset_nuser(TSEL);
         if (has)
             ev_value_text(TSEL, MOTION_PSET, pv, nb, &u);
