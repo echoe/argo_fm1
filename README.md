@@ -250,15 +250,11 @@ The keys still play notes so watch out if you're doing it live :)
 
 ### More INSERT effects
 
-We've added a GRAIN effect and a TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
+We've added a GRAIN effect, COMB effect, and TAPE effect. This is to make up for the GRANULAR engine being removed [because it needed samples as an input]. They're pretty simple, but still fun!
 
-There is also a COMB effect: a comb filter tuned to a pitch. FREQ sets the pitch, FDBK how long it rings (negative values give the hollow, odd-harmonics-only sound) and DAMP how quickly the ringing darkens.
+### DJFX Looper mode
 
-### Two INSERTs
-
-FX has three INSERT pages now: INSERT 1 and INSERT 2 each have a TYPE and its three values, and INSERT MIX holds MIX A and MIX B (the dry / wet of each) and LINK. LINK SER puts INSERT 2 after INSERT 1; PAR runs both on the sound and adds what each does to it. GRAIN and COMB borrow the SLICER's buffer: if INSERT 1 is a GRAIN, INSERT 2 cannot be a GRAIN or a COMB (it is passed by), and likewise a GRAIN in INSERT 2 is passed by when INSERT 1 is a COMB. Two COMBs are fine. A COMB that is still ringing when the last note ends is cut off after about 185 ms.
-
-Because of the six new parameters, a project holds 120 automation / parameter-lock records instead of 128 (an older project with more keeps its first 120). Projects saved by the previous build load with INSERT 2 OFF.
+Under the FX live mode, button 15 enables DJFX Looper mode. You can set it to loop, or set it to live speed up or slow down your loop.
 
 ## Tips and tricks
 
@@ -273,7 +269,7 @@ If you don't know why something is happening to your sound, there are a few plac
 
 ## Changelog
 Really should've had this before, oops.
-1.8.5 - second insert slot, chorus is now juno-style, added comb filter insert effect, letting preset swaps be set to AUTO mode and not LOCK
+1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
 1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay
