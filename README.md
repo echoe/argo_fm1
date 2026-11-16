@@ -269,15 +269,16 @@ If you don't know why something is happening to your sound, there are a few plac
 
 ## Changelog
 Really should've had this before, oops.
-1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
-1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
-1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
-1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay
-1.8.1 - added page for preset swaps, tape insert effect, tweaked SHDRUM engine, 16 user patch slots, new flash support, bugs and labels
-1.7.0 - rename to Argo, fully removed sample engines and samples, added Mini-Tone engines (FMTONE, SWARM, WAVETONE), added DRUM-X from JIANT, added preset change per step, added SH-DRUM engine, added granular insert effect
-1.6.1_and_sequences - tweaked generative arp settings, chord mode location, strum time settings
-1.6.1_and_sequences - added a generative arpeggiator and a chord mode.
-1.5.1_and_sequences - first release, Felucca 1.5.1 but with sequences and not with user samples.
+
+- 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
+- 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
+- 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
+- 1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay
+- 1.8.1 - added page for preset swaps, tape insert effect, tweaked SHDRUM engine, 16 user patch slots, new flash support, bugs and labels
+- 1.7.0 - rename to Argo, fully removed sample engines and samples, added Mini-Tone engines (FMTONE, SWARM, WAVETONE), added DRUM-X from JIANT, added preset change per step, added SH-DRUM engine, added granular insert effect
+- 1.6.1_and_sequences - tweaked generative arp settings, chord mode location, strum time settings
+- 1.6.1_and_sequences - added a generative arpeggiator and a chord mode.
+- 1.5.1_and_sequences - first release, Felucca 1.5.1 but with sequences and not with user samples.
 
 ## That's it!
 If you have any requests or suggestions, please feel free to let me know!
