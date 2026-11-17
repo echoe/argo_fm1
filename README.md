@@ -266,6 +266,7 @@ If you don't know why something is happening to your sound, there are a few plac
 - If all else fails, check the LFO pages to make sure there's no LFO routing to what's being changed - either on the first three pages, or on the mod matrix page.
 - If your chord mode is not playing a chord, make sure your preset isn't a mono, legato, or unison preset! You can check on the 'VOICE' page when editing the synth: usually this will be the third-to-last page.
 - If you set automation and it is not saved, or it's taking up too many commands, you can use OCT+ on the AUTOMATION page under SEQ to swap between LOCK and AUTO. LOCK will only lock it at the specific step: AUTO will keep your change for the rest of the sequence.
+- Quantize is set on by default and deletes all of your nudges. If you want some interestingly-spaced sounds, turn it off!!! It's the second row on the AUTO page.
 
 ## Changelog
 Really should've had this before, oops.
@@ -282,3 +283,9 @@ Really should've had this before, oops.
 
 ## That's it!
 If you have any requests or suggestions, please feel free to let me know!
+
+## Todo
+- ship minor fixes put into main branch after last point release
+- continuing to fix up LEAD synth
+- turning quantize off by default [ I think ... I will debate this but that's how I'm leaning ]
+- possibly adding a few more synths, depending. like a 4-op opx-style synth ... working on making the editing usable for that. but we'll see
