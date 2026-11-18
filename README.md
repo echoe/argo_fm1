@@ -288,5 +288,6 @@ If you don't know why something is happening to your sound, there are a few plac
 If you have any requests or suggestions, please feel free to let me know!
 
 ## Todo
+- fix the rest of the areas this advertises itself as Felucca (MIDI, USB out) so it advertises itself as Argo instead
 - possibly set QUANTIZE off by default. to do this I'd just set P_SQNT to 1 in params.c, then would fix the expectations for all those tests
 - possibly adding a few more synths, depending. like a 4-op opx-style synth ... working on making the editing usable for that. but we'll see
