@@ -272,9 +272,8 @@ If you don't know why something is happening to your sound, there are a few plac
 - Quantize is set on by default and deletes all of your nudges. If you want some interestingly-spaced sounds, turn it off!!! It's the second row on the AUTO page.
 
 ## Changelog
-Really should've had this before, oops.
 
-- unreleased - LEAD: Synth1-style pulse width on ENV SHP (LEAD sounds with a non-zero SHP change), a filter envelope of its own (FLT ENV pages), Synth1 `.sy1` patch import in the web editor
+- 1.8.6 - LEAD updates to make engine more accurate and well laid out, synth1 preset import, opx4 synth added, djfx knob direction bugfix
 - 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 - 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
 - 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
@@ -289,7 +288,5 @@ Really should've had this before, oops.
 If you have any requests or suggestions, please feel free to let me know!
 
 ## Todo
-- ship minor fixes put into main branch after last point release
-- continuing to fix up LEAD synth
-- turning quantize off by default [ I think ... I will debate this but that's how I'm leaning ]
+- possibly set QUANTIZE off by default. to do this I'd just set P_SQNT to 1 in params.c, then would fix the expectations for all those tests
 - possibly adding a few more synths, depending. like a 4-op opx-style synth ... working on making the editing usable for that. but we'll see
