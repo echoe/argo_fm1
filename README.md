@@ -212,7 +212,10 @@ LEAD controls/features in depth:
   - FM amount (OSC 2 to OSC 1 phase modulation), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: Sine, Tri, Saw, Square), Keytrack (OSC 2 key tracking).
   - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
   - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
-  - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
+  - Pulse width is Synth1's: the ENV section's second page, SHP, is the static width (+63 is square, 0 is Synth1's default 25%, -64 the narrowest). The LFO's SHP and the mod envelope's PW destination move it from there by a share of the room left on that side, as Synth1's. (This changed: before, SHP was an envelope amount around a square wave.)
+  - FLT MIX page: Saturation (SAT) and the filter envelope's Amount (FAMT, -64..+63; 0 is off, +-64 sweeps the whole range, as Synth1's). FLT ENV page: its own ADSR for the cutoff (Attack, Decay, Sustain, Release). It is added to the track's ENV -> FLT (the amp ADSR's), so set that to 0 to hear it alone.
+  - The mod envelope's FM destination follows the decay in dB and moves FM by a share of the room left, as Synth1's.
+  - Synth1 patches: in the web editor's LEAD tab, "Import .sy1" reads one or several Synth1 patches and "Send to LEAD" converts the selected one onto the track. Oscillators, filter, envelopes, mod envelope, LFO 1, unison and glide are converted; each field shows how sure the mapping is, and what has no LEAD equivalent (arpeggiator, EQ, effect, OSC 1 detune copies, key shift...) is listed. The mapping was measured against Synth1's engine (fm1-sy1's `s1render`): `tools/sy1_ab.py` renders 49 test patches through both and compares level over time and spectrum, `tools/sy1_calibrate.py` finds the best LEAD value for a Synth1 one (see the tools' headers; `tests/sy1_render.c` is the LEAD side).
 
 
 SH-TONE controls/features in depth:
@@ -271,6 +274,7 @@ If you don't know why something is happening to your sound, there are a few plac
 ## Changelog
 Really should've had this before, oops.
 
+- unreleased - LEAD: Synth1-style pulse width on ENV SHP (LEAD sounds with a non-zero SHP change), a filter envelope of its own (FLT ENV pages), Synth1 `.sy1` patch import in the web editor
 - 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 - 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
 - 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.

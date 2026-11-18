@@ -4,7 +4,7 @@
  *
  * This is a fixed-point re-implementation of the architecture and of the behaviour Synth2 (chab/oxo_synth2, MIT) measured on
  * the original; no Synth2 code is used (it is double-precision C++). What it takes from those measurements:
- *   - OSC 1 shapes SIN SAW PLS TRI, OSC 2 shapes SAW PLS TRI NOIS; pulse width from the track's SHP (64 = square);
+ *   - OSC 1 shapes SIN SAW PLS TRI, OSC 2 shapes SAW PLS TRI NOIS; pulse width as Synth1's: the track's ENV SHP is the static width (+63 = square, 0 = 25 %);
  *   - MIX is a linear crossfade OSC 1 -> OSC 2; the SUB (an octave below OSC 1, phase-locked to it, SIN TRI SAW SQR) takes
  *     weight w = SUB / (SUB + 32) off OSC 1 and OSC 2 (OSC 1 (1-w)(1-m), SUB w(1-m), OSC 2 (1-w) m, over 1 - w m);
  *   - SYNC resets OSC 2 to phase 0 whenever OSC 1's phase drops (naive reset, not band-limited, as the original); RING
@@ -27,7 +27,6 @@
  * (EDIT 2, which would hold E4..E7, is hidden for LEAD: its MIX and FILTER pages below take them, ui.c page_visible)
  * MIX:             MIX   0 = OSC 1 (and SUB) only, 127 = OSC 2 only
  *                  XMOD  OFF SYNC RING S+R
- *                  SAT   saturation
  * OSC 2 (FM operator slots, as SWARM's: lead_xdesc names them):
  *                  FM    OSC 2 -> OSC 1 phase modulation, 0 .. 127
  *                  SUB   the sub oscillator's level          SUBW  its shape
@@ -35,10 +34,18 @@
  * FILTER:          FTYP  LP12 LP24 HP12 BP12 LPDL
  *                  CUT   the filter's cutoff (the track's ENV / LFO -> FLT move it)
  *                  RES   resonance               KEY  key tracking
+ * FLT MIX:         SAT   saturation
+ *                  FAMT  the filter envelope's amount -64 .. +63 (0 = off: the sound is the one of before it)
+ * FLT ENV:         FATK  attack   FDEC  decay   FSUS  sustain   FREL  release: a filter envelope of the voice's own, ADSR like
+ *                  Synth1's, which moves the cutoff by FAMT x 2 knob units at full level (-64 .. +63: the whole range, as
+ *                  Synth1's amount). It is added to the track's ENV -> FLT (the amp ADSR's): set that to 0 to hear this one alone.
  * MOD ENV:         MAMT  amount -64 .. +63   MATK  attack   MDEC  decay   MDST  OSC2 (pitch), FM, PW
+ *                  As Synth1's: on OSC2's pitch +-60 semitones; on FM and PW it moves the value by a share of the room left on that side
+ *                  (+1 = all of it), and the FM follows the decay in dB (0 dB = 1, -80 dB = 0: a straight fall, not an exponential).
  *
  * State: s[0] s[1] the first filter stage, s[2] s[3] the second, s[4] the noise generator, s[5] the mod envelope's level
- * (Q16), s[6] its stage (0 attack, 1 decay); ph[0] OSC 1, ph[1] OSC 2, ph[2] the sub's half-cycle (0 / 1). */
+ * (Q16), s[6] its stage (0 attack, 1 decay); s[7] the filter envelope: its level in Q20 (bits 0..23) and its stage (bits
+ * 24..25: 0 attack, 1 decay / sustain, 3 release); ph[0] OSC 1, ph[1] OSC 2, ph[2] the sub's half-cycle (0 / 1). */
 static const char *const N_LD_W1[] = {"SIN", "SAW", "PLS", "TRI"};
 static const char *const N_LD_W2[] = {"SAW", "PLS", "TRI", "NOIS"};
 static const char *const N_LD_XM[] = {"OFF", "SYNC", "RING", "S+R"};
@@ -48,7 +55,7 @@ static const char *const N_LD_KT[] = {"OFF", "ON"};
 static const char *const N_LD_MD[] = {"OSC2", "FM", "PW"};
 enum { LDX_SYNC = 1, LDX_RING = 2 };
 
-#define LDP_FM P_FM1_ATK         /* the slots (lead_xdesc, params.c PAGES "OSC 2", "FILTER", "MOD ENV") */
+#define LDP_FM P_FM1_ATK         /* the slots (lead_xdesc, params.c PAGES "OSC 2", "FILTER", "FLT MIX", "FLT ENV", "MOD ENV") */
 #define LDP_SUB P_FM1_DEC
 #define LDP_SUBW P_FM1_SUS
 #define LDP_KTRK P_FM1_REL
@@ -59,7 +66,12 @@ enum { LDX_SYNC = 1, LDX_RING = 2 };
 #define LDP_MATK P_FM3_DEC
 #define LDP_MDEC P_FM3_SUS
 #define LDP_MDST P_FM3_REL
-#define LD_NX 11                 /* the slots a preset sets (LEAD_X) */
+#define LDP_FAMT P_FM4_ATK       /* the filter envelope: the slots whose stored value in a sound of before is 0 or a time: FAMT 0 = off */
+#define LDP_FATK P_FM4_DEC
+#define LDP_FDEC P_FM4_SUS
+#define LDP_FSUS P_FM4_REL
+#define LDP_FREL P_FM4_LEVEL
+#define LD_NX 11                 /* the slots a preset sets (LEAD_X); the filter envelope's five are set off (lead_track_loaded) */
 
 static const param_desc_t LD_TD[P_FM4_LEVEL - P_FM1_ATK + 1] = {
     [LDP_FM - P_FM1_ATK] = {"FM", F_PCT, 0, 127, 0, 0, 0},
@@ -73,6 +85,11 @@ static const param_desc_t LD_TD[P_FM4_LEVEL - P_FM1_ATK + 1] = {
     [LDP_MATK - P_FM1_ATK] = {"MATK", F_PCT, 0, 127, 0, 0, 0},
     [LDP_MDEC - P_FM1_ATK] = {"MDEC", F_PCT, 0, 127, 40, 0, 0},
     [LDP_MDST - P_FM1_ATK] = {"MDST", F_ENUM, 0, 2, 0, N_LD_MD, 0},
+    [LDP_FAMT - P_FM1_ATK] = {"FAMT", F_BIPCT, -64, 63, 0, 0, 0},
+    [LDP_FATK - P_FM1_ATK] = {"FATK", F_TIME, 0, 127, 0, 0, 0},
+    [LDP_FDEC - P_FM1_ATK] = {"FDEC", F_TIME, 0, 127, 70, 0, 0},
+    [LDP_FSUS - P_FM1_ATK] = {"FSUS", F_PCT, 0, 127, 40, 0, 0},
+    [LDP_FREL - P_FM1_ATK] = {"FREL", F_TIME, 0, 127, 60, 0, 0},
 };
 /* LEAD's name for the FM operator slot id (params.c track_desc / param_desc_of), 0 = not one of its own */
 static const param_desc_t *lead_xdesc(uint32_t id)
@@ -138,6 +155,60 @@ static void lead_note_on(track_t *t, voice_t *v)
         v->s[4] = 1;
     v->s[5] = 0;                                      /* the mod envelope restarts */
     v->s[6] = 0;
+    v->s[7] = 0;                                      /* and the filter envelope (level 0, attack) */
+}
+
+/* the filter envelope, a block at a time: the attack rises linearly (ENV_LIN, the host's time law), the decay falls toward the
+ * sustain and the release toward 0 by a constant fraction (ENV_EXP: ~99 % of the way after the time). Returns its level in
+ * Q16 (65536 = full) and keeps level and stage in s[7]. A voice whose key is up releases whatever its stage. */
+/* log2(x / 65536) in Q8 (x > 0): the bit position and a 33-step table of log2(1 + i / 32), the nearest step (0.02 octave off at most) */
+static int32_t lead_log2q8(uint32_t x)
+{
+    static const uint16_t L[33] = {0,11,22,33,44,54,63,73,82,92,100,109,118,126,134,142,150,157,165,172,179,186,193,200,207,213,220,226,232,238,244,250,256};
+    int32_t b = 31;
+    uint32_t m;
+    while (b > 0 && !(x >> b))
+        b--;
+    m = b >= 6 ? (x >> (b - 6)) & 63u : (x << (6 - b)) & 63u;
+    return (b - 16) * 256 + (int32_t)L[(m + 1u) >> 1];
+}
+
+/* pw (a 32-bit fraction of the cycle) moved by g (Q15, -1 .. +1) of the room left above it (g > 0) or below it (g < 0): Synth1's
+ * w += m * (m > 0 ? 1 - w : w), the width kept between 1.25 / 254 and 1 - 1.375 / 254 of the cycle. Past a square it is the
+ * same sound, reversed. */
+static uint32_t lead_pw_move(uint32_t pw, int32_t g)
+{
+    int32_t q = (int32_t)(pw >> 1), room, d;
+    g = clamp(g, -32767, 32767);
+    room = g > 0 ? (int32_t)0x7FFFFFFF - q : q;
+    d = (g * (room >> 16)) << 1;
+    return (uint32_t)clamp(q + d, 0x00A14285, 0x7F4E9D3A) << 1;
+}
+
+static int32_t lead_fenv(const int16_t *p, voice_t *v, uint32_t n)
+{
+    int32_t lvl = v->s[7] & 0xFFFFFF;                 /* Q20 */
+    uint32_t st = ((uint32_t)v->s[7] >> 24) & 3u, k;
+    if (!v->gate)
+        st = 3u;
+    if (st == 0u) {
+        lvl += (int32_t)((ENV_LIN[clamp(p[LDP_FATK], 0, 127)] >> 4) * n / CTL);
+        if (lvl >= (1 << 20)) {
+            lvl = 1 << 20;
+            st = 1u;
+        }
+    } else if (st == 1u) {
+        int32_t sus = clamp(p[LDP_FSUS], 0, 127) * 8256;      /* Q20: 127 -> 1048512 */
+        k = (uint32_t)ENV_EXP[clamp(p[LDP_FDEC], 0, 127)] * n / CTL;
+        lvl += (((sus - lvl) >> 5) * (int32_t)k) >> 11;
+    } else {
+        k = (uint32_t)ENV_EXP[clamp(p[LDP_FREL], 0, 127)] * n / CTL;
+        lvl -= (((lvl >> 5) * (int32_t)k) >> 11);
+    }
+    if (lvl < 0)
+        lvl = 0;
+    v->s[7] = lvl | (int32_t)(st << 24);
+    return lvl >> 4;
 }
 
 static void lead_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
@@ -148,7 +219,11 @@ static void lead_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     int32_t ptch = p[P_E2], det = p[P_E3], mix = p[P_E4], fm = p[LDP_FM], sub = p[LDP_SUB], sat = p[LDP_SAT], mamt = p[LDP_MAMT];
     int32_t cut = (p[P_E6] << 8) + m->cutoff + (((m->pitch16 - 60 * 16) * p[LDP_KEY] * 151) >> 10);
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], tog = v->ph[2] & 1u, inc1 = m->inc, inc2;
-    uint32_t pw = 0x80000000u + ((uint32_t)(m->shape - (64 << 8)) << 15);
+    /* the pulse width is Synth1's: the track's ENV SHP (P_ED_SHP, -64 .. +63) is the static width here, as its PULSE WIDTH knob
+     * (0 .. 127): the narrow part is (SHP + 64) / 254 of the cycle, +63 = square, 0 = 25 %, -64 = the narrowest. What moves it
+     * (the LFO's SHP, the modulation matrix, the mod envelope) moves it by a share of the room left on that side, as Synth1's:
+     * lead_pw_move. The envelope's share of m->shape (the host's ENV x SHP) is taken out. */
+    uint32_t pw = p[P_ED_SHP] >= 63 ? 0x80000000u : (uint32_t)(p[P_ED_SHP] + 64) * 16909321u;
     uint32_t dev16 = 0, sync = xm & LDX_SYNC, ring = (xm & LDX_RING) != 0, subinc = inc1 >> 1;
     int32_t ic1 = v->s[0], ic2 = v->s[1], ic3 = v->s[2], ic4 = v->s[3], nst = v->s[4];
     int32_t lvl = v->s[5], g = 0, p2 = ((ktrk ? m->pitch16 : 57 * 16) + ptch * 16), fmv = fm;
@@ -173,10 +248,19 @@ static void lead_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         g = (mq * lvl) >> 16;                         /* Q15, signed */
         if (mdst == 0)
             p2 += (g * 960) >> 15;                    /* +-60 semitones */
-        else if (mdst == 1)
-            fmv = clamp(fm + ((g * 127) >> 15), 0, 127);
-        else
-            pw = (uint32_t)clamp((int32_t)(pw >> 1) + (g << 13), 0x00800000, 0x7F800000) << 1;
+        else if (mdst == 1) {                         /* FM, as Synth1's: the decay in dB (0 dB = 1, -80 dB = 0: a straight fall), */
+            int32_t gl = lvl;                         /* and the amount moves it by a share of the room left on that side */
+            if (v->s[6] != 0)
+                gl = lvl > 6 ? clamp(65536 + ((lead_log2q8((uint32_t)lvl) * 9865) >> 10) * 2, 0, 65536) : 0;
+            g = (mq * gl) >> 16;
+            fmv = clamp(fm + (g > 0 ? ((127 - fm) * g) >> 15 : (fm * g) >> 15), 0, 127);
+        } else
+            pw = lead_pw_move(pw, g);
+    }
+    {   /* the LFO's SHP and the matrix: m->shape less the 64 << 8 centre and the envelope's share, +-64 units = +-1 of the room */
+        int32_t sh = m->shape - (64 << 8) - ((m->envq15 * p[P_ED_SHP]) >> 7);
+        if (sh)
+            pw = lead_pw_move(pw, sh * 2);
     }
     if (ptch || det || (mdst == 0 && mamt) || !ktrk)
         inc2 = cents_inc(p2, det, m->fine);
@@ -191,6 +275,8 @@ static void lead_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         cS = (((wsub * (one - m2)) >> 15) * nrm) >> 15;
         cB = ((((one - wsub) * m2) >> 15) * nrm) >> 15;
     }
+    if (p[LDP_FAMT])                                  /* the filter envelope: +-64 = +-127 knob units at full level */
+        cut += (p[LDP_FAMT] * lead_fenv(p, v, n)) >> 7;
     tsvf_coef(&f1, cut, p[P_E7]);
     tsvf_coef(&f2, cut, 0);
     k1 = 8192 - p[P_E7] * 7600 / 127;                 /* tsvf_coef's damping (HP and BP taps) */
@@ -386,4 +472,10 @@ static void lead_track_loaded(track_t *t)
     x = LEAD_X[(uint32_t)t->preset % NELEM(LEAD_X)];
     for (i = 0; i < LD_NX; i++)
         t->p[ID[i]] = x[i];
+    t->p[P_ED_SHP] = 63;                              /* square: the static pulse width (ENV SHP) */
+    t->p[LDP_FAMT] = 0;                               /* the filter envelope off (a preset of before has none) */
+    t->p[LDP_FATK] = 0;
+    t->p[LDP_FDEC] = 70;
+    t->p[LDP_FSUS] = 40;
+    t->p[LDP_FREL] = 60;
 }
