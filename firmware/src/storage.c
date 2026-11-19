@@ -136,6 +136,16 @@ static int st_current(uint32_t obj, st_hdr_t *h)
     return -1;
 }
 
+/* a view of the current payload of an object, in st_buf: valid until the next st_ call. NULL when there is none (*len: its length) */
+static const uint8_t *st_view(uint32_t obj, uint32_t *len)
+{
+    st_hdr_t h;
+    if (!st_obj_ok(obj) || st_current(obj, &h) < 0)
+        return 0;
+    *len = h.len;
+    return st_buf;
+}
+
 /* load the whole object into dst; returns its length, or -1 if it does not fit */
 static int st_load(uint32_t obj, void *dst, uint32_t max)
 {

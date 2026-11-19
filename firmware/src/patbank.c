@@ -7,20 +7,29 @@
  * Switching (pb_select): the playing sequence is packed into the mirror, the chosen one is put into the track, at once,
  * in the middle of a pass (the playhead keeps its step). Main loop only.
  * Persistence (patbank_store.c): the project record keeps the sequence that plays; the others are in flash, five stores
- * (project A..D, the live music) of six objects: object o < 5 holds sequences 6 o .. 6 o + 5 (q = track * 8 + slot), object
- * 5 the last two and the rest (the sequence each track plays, the LENs, the automation of the sequences not playing). */
+ * (project A..D, the live music), each with six objects' room (the addresses are storage.c's) of which five are used since
+ * the sparse format (1.8.7): object t < 4 holds the eight sequences of track t as lists (a bitmap of the steps that have
+ * anything in them, then those steps), object 4 the rest (the sequence each track plays, the LENs, the automation of the
+ * sequences not playing, the chord packs). The sixth object of each store is free: what was the old meta object (format 1..3:
+ * object o < 5 six dense sequences q = track * 8 + slot, object 5 the last two and the rest) becomes the OPX engine's. A store
+ * of the old format is converted in place, object by object, by pb_store_convert (patbank_store.c). */
 #if FELUCCA_PATBANK
 #define PB_N 8u                          /* sequences per track */
 #define PB_NSEQ (NTRK * PB_N)
 #define PB_STEP_B 9u                     /* a step packed: project.c proj_pack's nine bytes */
 #define PB_PAT_B (NSTEP * PB_STEP_B)
 #define PB_MO_MAX 64u                    /* automation records of a sequence that is not playing */
-#define PB_PER 6u                        /* sequences an object holds */
-#define PB_NOBJ 6u
+#define PB_PER 6u                        /* sequences an object of the OLD format (1..3) held */
+#define PB_NOBJ 6u                       /* the objects a store has room for (OBJ_PB0 + 6 s + o) */
+#define PB_NUSED 5u                      /* the ones in use: the tracks' 0..3 and the meta object 4 */
+#define PB_ALLOBJ 0x1Fu                  /* (pb_dirty, the mask of a whole store) */
 #define PB_NSTORE 5u
 #define PB_LIVE 4u                       /* the live music's store */
 #define PB_HDR 8u
-#define PB_META_O 5u
+#define PB_META_O 4u                     /* (the old format's was 5: PB_OLD_META_O) */
+#define PB_OLD_META_O 5u
+#define PB_FMT 4u                        /* the sparse format's version byte */
+#define PB_BM ((NSTEP + 7u) / 8u)        /* a sequence's bitmap: bit i set, step i has something in it */
 #define PB_OBJ_MAX ST_PAYLOAD_MAX
 typedef struct { uint8_t count, on; motion_event_t ev[PB_MO_MAX]; } pb_mo_t;
 
@@ -33,7 +42,7 @@ static uint8_t pb_last[NTRK];            /* the step each track was on when pb_d
 static uint8_t pb_fired[NTRK];           /* a switch happened on this pass's last step: not again until the pass is under way */
 static uint8_t pb_cmask[NTRK];           /* CHAIN: bit s set, sequence s of the track is one the user chained (patbank.c pb_chain_next) */
 static uint8_t pb_ready;
-static uint8_t pb_dirty;                 /* bit o: the live store's object o is older than the mirror */
+static uint8_t pb_dirty;                 /* bit o: the live store's object o (track o's sequences, 4 the meta) is older than the mirror */
 static uint32_t pb_gen;                  /* + 1 per change (autosave_sig) */
 
 /* ---- steps <-> bytes: the bytes of project.c proj_pack / proj_unpack ---- */
@@ -93,6 +102,7 @@ static void pb_clear_all(void)
 {
     uint32_t q;
     step_t e[NSTEP];
+    memset(e, 0, sizeof e);
     for (q = 0; q < NSTEP; q++)
         step_clear(&e[q]);
     pb_pack_pat(pb_pat[0], e);
@@ -120,7 +130,7 @@ static void pb_sync(uint32_t t)
     pb_pack_pat(b, trk[t].step);
     if (memcmp(pb_pat[q], b, PB_PAT_B)) {
         memcpy(pb_pat[q], b, PB_PAT_B);
-        pb_dirty |= (uint8_t)(1u << (q / PB_PER));
+        pb_dirty |= (uint8_t)(1u << (q / PB_N));
         pb_gen++;
     }
     if (pb_len[q] != (uint8_t)trk[t].p[P_SLEN]) {
@@ -196,7 +206,7 @@ static int pb_select(uint32_t t, uint32_t slot)
     motion_unguard(f);
     pb_cur[t] = (uint8_t)slot;
     pb_next[t] = 0;
-    pb_dirty |= (uint8_t)(1u << (q / PB_PER) | 1u << (old / PB_PER) | 1u << PB_META_O);
+    pb_dirty |= (uint8_t)(1u << t | 1u << PB_META_O);
     pb_gen++;
     return 0;
 }
@@ -311,7 +321,7 @@ static void pb_reset_to_live(void)
     memset(play_lat, 0, sizeof play_lat);
     for (t = 0; t < NTRK; t++)
         pb_sync(t);
-    pb_dirty = 0x3Fu;
+    pb_dirty = PB_ALLOBJ;
     pb_gen++;
 }
 

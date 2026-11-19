@@ -491,6 +491,7 @@ static int pb_store_load(uint32_t s);
 static int pb_flush_live(void);
 static int pb_store_saved(uint32_t s, uint8_t *cur);
 static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo);
+static void pb_convert_all(void);
 #endif
 static int proj_import_old(project_t *q, const void *b, int n);
 static int proj_import_any(project_t *q, const void *b, int n);
@@ -908,9 +909,9 @@ static int project_save_as(uint32_t slot, const char *name)
     }
 #if FELUCCA_PATBANK && FELUCCA_FLASH
     if (flash_ok) {                                    /* the sequences first: the record is what makes the slot */
-        int rc = pb_store_save(slot & 3u, (1u << PB_NOBJ) - 1u);
+        int rc = pb_store_save(slot & 3u, PB_ALLOBJ);
         if (rc) {
-            ui_message(rc == 3 ? "AUTOMATION FULL" : "SAVE ERROR");
+            ui_message(rc == 3 ? "AUTOMATION FULL" : rc == 4 ? "SEQUENCES FULL" : "SAVE ERROR");
             return 2;
         }
     }
@@ -1526,6 +1527,10 @@ static void autosave_poll(void)
 static int autosave_boot(int allowed)
 {
     int rc = 0;
+#if FELUCCA_FLASH && FELUCCA_PATBANK
+    if (flash_ok)
+        pb_convert_all();                               /* (the sequence banks of 1.8.6 and before become the sparse format, in place) */
+#endif
 #if FELUCCA_FLASH
     if (flash_ok && allowed && !(ui_prefs & PREF_RESTORE_OFF)) {
         int n;
