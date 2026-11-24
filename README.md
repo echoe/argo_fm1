@@ -273,8 +273,7 @@ If you don't know why something is happening to your sound, there are a few plac
 
 ## Changelog
 
-- 1.8.7 - the sequence banks in flash are stored as sparse lists (a bitmap of the steps that have anything in them, then those steps) instead of 576 bytes a sequence: the sixth flash object of each of the five stores is free (for the OPX-style synth, 40 KiB in all). The banks of 1.8.6 and before convert in place the first time you power on (a power cut in the middle is fine: it goes on at the next one); the GEN knobs of a track are the only thing lost if that happens. A track whose eight sequences are so full that they do not fit one flash object (about 500 steps, all with chords and ratchets) refuses to save: SEQUENCES FULL. Flashing 1.8.6 back after this turns the banks into empty ones.
-- 1.8.6 - LEAD updates to make engine more accurate and well laid out, synth1 preset import, opx4 synth added, djfx knob direction bugfix
+- 1.8.6 - sequence banks in flash are stored as sparse lists. [previous banks convert in place on power on. A track whose sequences are so full that they do not fit one flash object (about 500 steps, all with chords and ratchets) refuses to save and flashes an error: SEQUENCES FULL.] also, LEAD engine updates to make engine more accurate and well laid out, synth1 preset import to LEAD, djfx knob direction bugfix.
 - 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 - 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
 - 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
@@ -291,4 +290,5 @@ If you have any requests or suggestions, please feel free to let me know!
 ## Todo
 - fix the rest of the areas this advertises itself as Felucca (MIDI, USB out) so it advertises itself as Argo instead
 - possibly set QUANTIZE off by default. to do this I'd just set P_SQNT to 1 in params.c, then would fix the expectations for all those tests
-- possibly adding a few more synths, depending. like a 4-op opx-style synth ... working on making the editing usable for that. but we'll see
+- continuing to see if opx4 synth can be added
+- possible rearchitect to base on new project branching off of felucca, which can then build everywhere instead of just the fm-1. this will probably be argo 2.0 if/when I get there
