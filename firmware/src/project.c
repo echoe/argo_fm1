@@ -94,6 +94,9 @@
  *
  * Built on the Mac too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP) and engines.c. */
+#define PROJ_NSTEP NSTEP_REC                         /* steps a project record holds (FUN1..FUN10: every format): a sequence has NSTEP (1.9: 128) and the
+                                                * steps from 64 up of the playing sequences are kept by the sequence banks (patbank_store.c: the upper
+                                                * halves; with their automation records and a LEN of 128, which a parameter byte cannot hold) */
 #define PROJ_MAGIC 0x46554E41u                 /* "FUNA" (FUN10): 104 (1.5: 111) parameters, 128 motion records, nudges */
 #define PROJ_MAGIC_V9 0x46554E39u              /* "FUN9": FUN8, 64 bytes longer (the DRUM lane levels, 99 parameters) */
 #define PROJ_MAGIC_V8 0x46554E38u              /* "FUN8": FUN7 + the tracks' FM6 patches */
@@ -113,7 +116,7 @@
 typedef struct {                               /* one track */
     int16_t p[P_COUNT];
     uint8_t engine, preset;
-    step_t step[NSTEP];
+    step_t step[PROJ_NSTEP];
 } proj_trk_t;
 typedef struct {
     uint32_t magic, size;
@@ -134,7 +137,7 @@ typedef struct {
 } project_t;
 /* Historical FUN5/6 types are frozen, independent of today's P_COUNT/step_t. */
 typedef struct { uint8_t note[4], n, time, flags, vel, hit, acc; } step10_t;
-typedef struct { int16_t p[69]; uint8_t engine, preset; step10_t step[NSTEP]; uint8_t lane[NLANE][5]; } proj_trk_v5_t;
+typedef struct { int16_t p[69]; uint8_t engine, preset; step10_t step[PROJ_NSTEP]; uint8_t lane[NLANE][5]; } proj_trk_v5_t;
 typedef struct {                               /* format 5, before the song chain */
     uint32_t magic, size;
     int16_t g[G_COUNT];
@@ -154,6 +157,7 @@ _Static_assert(sizeof(project_v5_t) == 3352u && sizeof(project_v6_t) == 3388u, "
  * reserved tail were left for parameters added later. FUN9: the same, 3648 bytes (see the top). */
 #define PROJ_STORE_SIZE 3840u                  /* FUN10: a whole storage object (storage.c ST_PAYLOAD_MAX) */
 #define PROJ_STORE_V9 3648u                    /* FUN9 */
+#define PROJ_MOTION_V10 (4u + 3u * MOTION_MAX)  /* the motion block of FUN10: count, on, 2 reserved, 128 x (place, id, value int8): 388 bytes */
 #define PROJ_MOTION_V9 260u                    /* the motion block of FUN7..FUN9: 64 x (place, id, i16 value) */
 #define PROJ_STORE_V8 3584u                    /* FUN8 */
 #define PROJ_STORE_V7 3388u                    /* FUN7 */
@@ -172,7 +176,7 @@ _Static_assert(sizeof(project_store_t) == 3840u && PROJ_STORE_V7 == sizeof(proje
 typedef struct {                               /* a track of format 4, read only */
     int16_t p[PROJ_NP_V4];
     uint8_t engine, preset;
-    step8_t step[NSTEP];
+    step8_t step[PROJ_NSTEP];
 } proj_trk_v4_t;
 typedef struct {                               /* format 4 (1.0 development builds), read only */
     uint32_t magic, size;
@@ -184,7 +188,7 @@ typedef struct {                               /* format 4 (1.0 development buil
 typedef struct {                               /* a track of format 3, read only */
     int16_t p[PROJ_NP_V3];
     uint8_t engine, preset;
-    step8_t step[NSTEP];
+    step8_t step[PROJ_NSTEP];
 } proj_trk_v3_t;
 typedef struct {                               /* format 3 (0.9 .. 1.0), read only */
     uint32_t magic, size;
@@ -198,7 +202,7 @@ typedef struct {                               /* format 3 (0.9 .. 1.0), read on
 typedef struct {                               /* a track of formats 1 and 2, read only */
     int16_t p[PROJ_NP_V2];
     uint8_t engine, preset;
-    step8_t step[NSTEP];
+    step8_t step[PROJ_NSTEP];
 } proj_trk_v2_t;
 typedef struct {                               /* format 2 (until 0.9), read only */
     uint32_t magic, size;
@@ -254,7 +258,7 @@ static void proj_trk_from(proj_trk_t *d, const int16_t *p, uint32_t np, uint8_t 
     params_by_count(d->p, p, np, def);
     d->engine = engine;                         /* (indices 0..7 of formats 1 and 2 as they were) */
     d->preset = preset;
-    for (k = 0; k < NSTEP; k++) {
+    for (k = 0; k < PROJ_NSTEP; k++) {
         step_t *s = &d->step[k];
         memcpy(s->note, step[k].note, 4);
         s->n = step[k].n;
@@ -271,7 +275,7 @@ static void proj_grid(project_t *q)
     uint32_t k, i;
     for (k = 0; k < NTRK; k++)
         if (q->t[k].engine == ENGI_DRUM)
-            for (i = 0; i < NSTEP; i++)
+            for (i = 0; i < PROJ_NSTEP; i++)
                 step_to_grid(&q->t[k].step[i]);
     q->sum = proj_sum(q);
 }
@@ -344,7 +348,7 @@ static void proj_fm4(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
+        if (((hit >> MO_TRK(e->place)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
             continue;
         q->motion.event[n++] = *e;
     }
@@ -376,7 +380,7 @@ static void proj_perc(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0)
+        if (((hit >> MO_TRK(e->place)) & 1u) && MOTION_ID(e) >= P_E0)
             continue;
         q->motion.event[n++] = *e;
     }
@@ -467,7 +471,7 @@ static int proj_from_v1(project_t *q, const project_v1_t *v1, int n)
             q->t[i].p[k] = param_desc_of(trk_def_engine(i), k)->def;
         q->t[i].engine = (uint8_t)trk_def_engine(i);
         q->t[i].preset = PROJ_DEF_SOUND;
-        for (k = 0; k < NSTEP; k++)
+        for (k = 0; k < PROJ_NSTEP; k++)
             q->t[i].step[k].time = ST_REST;
     }
     q->sum = proj_sum(q);
@@ -560,7 +564,7 @@ static int proj_import_old(project_t *q, const void *b, int n)
                 for (k = 0; k < P_COUNT; k++) def[k] = param_desc_of(v->t[i].engine, k)->def;
                 params_by_count(q->t[i].p, v->t[i].p, 69u, def);
                 q->t[i].engine = v->t[i].engine; q->t[i].preset = v->t[i].preset;
-                for (k = 0; k < NSTEP; k++) {
+                for (k = 0; k < PROJ_NSTEP; k++) {
                     memcpy(&q->t[i].step[k], &v->t[i].step[k], sizeof(step10_t));
                     q->t[i].step[k].flags &= 3u;       /* (x1: no RATCH then) */
                 }
@@ -625,6 +629,7 @@ static void proj_midi_unpack(project_t *q, const uint8_t *b)
         q->g[G_ROUTE] = ROUTE_TRACK;
 }
 
+static void proj_motion_pack(uint8_t *b, const motion_store_t *m);
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
  * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF. */
 static int proj_pack(project_store_t *out, const project_t *q)
@@ -638,11 +643,12 @@ static int proj_pack(project_store_t *out, const project_t *q)
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[65] = (uint8_t)q->slusr; b[66] = P_COUNT; b[67] = (uint8_t)(q->slusr >> 8);   /* (65 and 67 were never written: 0) */
     for (t = 0; t < NTRK; t++) {
         for (i = 0; i < P_COUNT; i++) {
-            if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
-            b[pos++] = (uint8_t)(q->t[t].p[i] + 64);
+            int16_t pv = i == P_SLEN && q->t[t].p[i] > (int16_t)LEN_REC ? (int16_t)LEN_REC : q->t[t].p[i];   /* (1.9: LEN 128 is 127 here: patbank_store.c keeps it) */
+            if (pv < -64 || pv > 127) return 0;
+            b[pos++] = (uint8_t)(pv + 64);
         }
         b[pos++] = q->t[t].engine; b[pos++] = q->t[t].preset;
-        for (i = 0; i < NSTEP; i++) {
+        for (i = 0; i < PROJ_NSTEP; i++) {
             const step_t *s = &q->t[t].step[i];
             uint32_t r = step_ratchet(s) - 1u;          /* RATCH: bit 7 of the velocity and chance bytes (see the top) */
             uint32_t nd = (uint32_t)step_nudge(s) & 15u;   /* NUDGE (FUN10): bit j in bit 7 of note j */
@@ -657,9 +663,9 @@ static int proj_pack(project_store_t *out, const project_t *q)
             b[pos++] = (uint8_t)(s->probability | (r >> 1) << 7);
         }
     }
-    if (pos + sizeof q->chain + sizeof q->motion > PROJ_MIDI_OFF) return 0;
+    if (pos + sizeof q->chain + PROJ_MOTION_V10 > PROJ_MIDI_OFF) return 0;
     memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
-    memcpy(b + pos, &q->motion, sizeof q->motion);
+    proj_motion_pack(b + pos, &q->motion);
     proj_midi_pack(b, q);
     memcpy(b + PROJ_FM6_OFF, q->fm6, sizeof q->fm6);
     {   /* the name (0-padded; stops at the first 0) */
@@ -667,6 +673,39 @@ static int proj_pack(project_store_t *out, const project_t *q)
         memcpy(b + PROJ_NAME_OFF, n, proj_name_get(n, (const uint8_t *)q->name));
     }
     sum = proj_hash(b, PROJ_STORE_SIZE - 4u); memcpy(b + PROJ_STORE_SIZE - 4u, &sum, 4);
+    return 1;
+}
+/* the motion block of FUN10 <-> the records in RAM (4 bytes each, core.h MO_PLACE). On flash a record is 3 bytes, its place
+ * track << 6 | step: the steps from NSTEP_REC up (1.9) are not here, patbank_store.c keeps them (an older block reads as before) */
+static void proj_motion_pack(uint8_t *b, const motion_store_t *m)
+{
+    uint32_t i, n = 0;
+    memset(b, 0, PROJ_MOTION_V10);
+    for (i = 0; i < m->count && i < MOTION_MAX; i++) {
+        const motion_event_t *e = &m->event[i];
+        if (MO_STEP(e->place) >= NSTEP_REC)
+            continue;
+        b[4u + 3u * n] = (uint8_t)(MO_TRK(e->place) << 6 | MO_STEP(e->place));
+        b[5u + 3u * n] = e->param;
+        b[6u + 3u * n] = (uint8_t)e->value;
+        n++;
+    }
+    b[0] = (uint8_t)n;
+    b[1] = m->on;
+}
+static int proj_motion_v10(motion_store_t *m, const uint8_t *b)
+{
+    uint32_t i;
+    memset(m, 0, sizeof *m);
+    if (b[0] > MOTION_MAX)
+        return 0;
+    m->count = b[0];
+    m->on = b[1];
+    for (i = 0; i < m->count; i++) {
+        m->event[i].place = MO_PLACE(b[4u + 3u * i] >> 6, b[4u + 3u * i] & 63u);
+        m->event[i].param = b[5u + 3u * i];
+        m->event[i].value = (int8_t)b[6u + 3u * i];
+    }
     return 1;
 }
 /* the motion of a FUN7 / FUN8 written with np parameters (np < P_COUNT: a FUN7 of 89 before the chord keys, every
@@ -702,7 +741,7 @@ static int proj_motion_v9(motion_store_t *m, const uint8_t *b)
         int32_t v = (int16_t)(e[2] | e[3] << 8);
         if (v < -64 || v > 127)
             return 0;
-        m->event[i].place = e[0];
+        m->event[i].place = MO_PLACE(e[0] >> 6, e[0] & 63u);
         m->event[i].param = e[1];
         m->event[i].value = (int8_t)v;
     }
@@ -714,11 +753,11 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
 {
     uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7, v10 = st == PROJ_STORE_SIZE;
     uint32_t name_off = st - 4u - PROJ_NAME_LEN, end = v7 ? name_off : name_off - NTRK * FM6_PACKED;
-    uint32_t mot = v10 ? sizeof q->motion : PROJ_MOTION_V9, chn = v10 ? sizeof q->chain : sizeof(chain_v9_t);
+    uint32_t mot = v10 ? PROJ_MOTION_V10 : PROJ_MOTION_V9, chn = v10 ? sizeof q->chain : sizeof(chain_v9_t);
     memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&sum, b + st - 4u, 4);
     if (magic != (v7 ? PROJ_MAGIC_V7 : st == PROJ_STORE_V8 ? PROJ_MAGIC_V8 : st == PROJ_STORE_V9 ? PROJ_MAGIC_V9 : PROJ_MAGIC) ||
         size != st || sum != proj_hash(b, st - 4u) ||
-        np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + NSTEP * 9u) + chn + mot > end)
+        np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + PROJ_NSTEP * 9u) + chn + mot > end)
         return 0;
     memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC; q->size = sizeof *q;
     memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
@@ -731,7 +770,7 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
         if (q->t[t].engine >= NENGINES) return 0;
         for (i = 0; i < P_COUNT; i++) def[i] = param_desc_of(q->t[t].engine, i)->def;
         params_by_count(q->t[t].p, values, np, def);
-        for (i = 0; i < NSTEP; i++) {
+        for (i = 0; i < PROJ_NSTEP; i++) {
             step_t *s = &q->t[t].step[i]; uint32_t meta, nd = 0;
             for (uint32_t j = 0; j < 4u; j++) {         /* (FUN10: bit 7 of note j is bit j of the nudge) */
                 if (b[pos] > 127u && !v10) return 0;
@@ -757,9 +796,10 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
         if (!chain_from_v9(&q->chain, &c9)) return 0;
     }
     pos += chn;
-    if (v10)
-        memcpy(&q->motion, b + pos, sizeof q->motion);
-    else if (!proj_motion_v9(&q->motion, b + pos))
+    if (v10) {
+        if (!proj_motion_v10(&q->motion, b + pos))
+            return 0;
+    } else if (!proj_motion_v9(&q->motion, b + pos))
         return 0;
     if (!proj_motion_ids(&q->motion, np) || !chain_valid(&q->chain) || !motion_valid(&q->motion)) return 0;
     if (v10) {
@@ -820,10 +860,10 @@ static union {                               /* serialized main-loop work; no re
 #define proj_wire (proj_wire_u.s)
 static uint8_t proj_wire_gen;                /* +1 whenever proj_wire is rewritten (a backup's runtime copy lives there) */
 
-static void proj_steps(step_t *s)            /* a loaded sequence stays inside its fixed fields */
+static void proj_steps(step_t *s, uint32_t n)   /* the first n steps of a loaded sequence stay inside their fixed fields (the record's: PROJ_NSTEP; a track's: NSTEP) */
 {
     uint32_t i, j;
-    for (i = 0; i < NSTEP; i++) {
+    for (i = 0; i < n; i++) {
         if (s[i].n > 4u) s[i].n = 4;
         if (s[i].time > ST_REST) s[i].time = ST_REST;
         for (j = 0; j < 4u; j++) s[i].note[j] &= 127u;
@@ -836,8 +876,8 @@ static void proj_bound(project_t *q)
 {
     uint32_t t, i;
     for (t = 0; t < NTRK; t++) {
-        proj_steps(q->t[t].step);
-        for (i = 0; i < NSTEP; i++) {
+        proj_steps(q->t[t].step, PROJ_NSTEP);
+        for (i = 0; i < PROJ_NSTEP; i++) {
             step_t *s = &q->t[t].step[i];
             s->flags &= 3u | SF_RATCH | SF_NUDGE;
             s->vel &= 127u;
@@ -887,7 +927,7 @@ static void project_capture(project_t *p)
         for (uint32_t j = 0; j < P_COUNT; j++) p->t[i].p[j] = motion_base_value(&trk[i], j);
         p->t[i].engine = trk[i].eng_req;
         p->t[i].preset = trk[i].preset;
-        memcpy(p->t[i].step, trk[i].step, sizeof trk[i].step);
+        memcpy(p->t[i].step, trk[i].step, sizeof p->t[i].step);   /* (the first NSTEP_REC: the rest is the sequence bank's) */
         fm6_pack(fm6_patch[i], p->fm6[i]);
     }
     p->motion = motion;
@@ -965,7 +1005,7 @@ static uint32_t len48_of(int32_t len, int32_t div)
  * 1 (a tie), 2 (a note or hit), 3 (accented); a cell's level is its steps' mean, rounded up (0..3) */
 static uint32_t proj_density(const proj_trk_t *t, uint8_t *n)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nc = len < 16u ? len : 16u, c, i, d = 0;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, PROJ_NSTEP), nc = len < 16u ? len : 16u, c, i, d = 0;
     for (c = 0; c < nc; c++) {
         uint32_t i0 = c * len / nc, i1 = (c + 1u) * len / nc, w = 0;
         for (i = i0; i < i1; i++) {
@@ -1117,8 +1157,10 @@ static int project_restore_runtime(const project_t *input)
             t->p[i] = (int16_t)param_fit(d, s->p[i]);
         }
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
-        memcpy(t->step, s->step, sizeof t->step);
-        proj_steps(t->step);
+        memcpy(t->step, s->step, sizeof s->step);
+        for (i = NSTEP_REC; i < NSTEP; i++)               /* (1.9: the upper steps come with the sequence bank, pb_store_load) */
+            step_clear(&t->step[i]);
+        proj_steps(t->step, NSTEP);
         {   /* the project's own FM6 patch, never reloaded from SLOT: F n if it is that factory patch, else OWN */
             uint8_t v[FP_SIZE + 1u];
             fm6_unpack(p->fm6[k], v);
@@ -1182,7 +1224,7 @@ static int project_new(void)
             q->t[i].p[k] = param_desc_of(trk_def_engine(i), k)->def;
         q->t[i].engine = (uint8_t)trk_def_engine(i);
         q->t[i].preset = PROJ_DEF_SOUND;                /* (project_restore_runtime: the power-on sound, no steps) */
-        for (k = 0; k < NSTEP; k++)
+        for (k = 0; k < PROJ_NSTEP; k++)
             q->t[i].step[k].time = ST_REST;
     }
     proj_fm6_init(q);                                   /* (and the sum) */
@@ -1321,15 +1363,42 @@ static uint32_t chain_prepare(void)
             {
                 motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
                 for (uint32_t e = 0; e < m->count; e++) {
-                    const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
+                    const motion_event_t *v = &m->event[e]; uint32_t owner = MO_TRK(v->place);
                     if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
                     m->event[n++] = *v;
                 }
                 m->count = (uint8_t)n;
             }
             for (k = 0; k < NTRK; k++) {
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+                {   /* 1.9: the steps from NSTEP_REC up of the sequence the project was saved on, and their automation, are the bank's
+                     * (the record holds the first NSTEP_REC): the whole list first, the record's own steps over it */
+                    uint8_t sv[NTRK], ln;
+                    pb_mo_t pm;
+                    uint32_t e;
+                    (void)pb_store_saved(i, sv);
+                    if (!flash_ok || pb_store_fetch(i, k, sv[k], chain.source[i].step[k], &ln, &pm)) {
+                        for (e = 0; e < NSTEP; e++)
+                            step_clear(&chain.source[i].step[k][e]);
+                        pm.count = 0;
+                    }
+                    for (e = 0; e < pm.count && e < PB_MO_MAX; e++) {
+                        motion_event_t v;
+                        motion_store_t *m = &chain.source[i].motion;
+                        pb_ev_to(&v, k, &pm.ev[e]);
+                        if (v.place == 0u && pm.ev[e].step < NSTEP_REC)
+                            continue;
+                        if (MOTION_ID(&v) >= P_FM1_ATK && p->t[k].engine != trk[k].eng_req)
+                            continue;
+                        if (pm.ev[e].step >= NSTEP_REC && m->count < MOTION_MAX)
+                            m->event[m->count++] = v;
+                    }
+                }
+#else
+                { uint32_t e; for (e = 0; e < NSTEP; e++) step_clear(&chain.source[i].step[k][e]); }
+#endif
                 memcpy(chain.source[i].step[k], p->t[k].step, sizeof p->t[k].step);
-                proj_steps(chain.source[i].step[k]);
+                proj_steps(chain.source[i].step[k], NSTEP);
                 chain.source[i].qnt[k] = p->t[k].p[P_SQNT] != 0;
                 for (j = 0; j < 4u; j++)
                     chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
@@ -1344,16 +1413,17 @@ static uint32_t chain_prepare(void)
                     uint32_t e, n = 0;
                     k = alt_k[j];
                     (void)pb_store_fetch(i, k, alt_q[j], al->step, &len, &pm);
-                    proj_steps(al->step);
+                    proj_steps(al->step, NSTEP);
                     memcpy(al->timing, chain.source[i].timing[k], sizeof al->timing);
                     al->timing[0] = (int16_t)clamp((int32_t)len, TP[P_SLEN].min, TP[P_SLEN].max);
                     al->qnt = chain.source[i].qnt[k];
                     memset(&al->motion, 0, sizeof al->motion);
                     for (e = 0; e < pm.count && e < PB_MO_MAX; e++) {
-                        const motion_event_t *v = &pm.ev[e];
-                        if ((uint32_t)(v->place >> 6) != k || (MOTION_ID(v) >= P_FM1_ATK && p->t[k].engine != trk[k].eng_req))
+                        motion_event_t v;
+                        pb_ev_to(&v, k, &pm.ev[e]);
+                        if (MOTION_ID(&v) >= P_FM1_ATK && p->t[k].engine != trk[k].eng_req)
                             continue;
-                        al->motion.event[n++] = *v;
+                        al->motion.event[n++] = v;
                     }
                     al->motion.count = (uint8_t)n;
                     al->motion.on = pm.on ? (uint8_t)(1u << k) : 0u;

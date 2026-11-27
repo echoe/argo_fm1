@@ -503,8 +503,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         str_cpy(val, N_ONOFF[v ? 1 : 0], 7);
         break;
     case F_STEPS:
-        fmt_int(val, v);
-        *unit = "STEP";
+        fmt_int(val, v);                              /* (1.9: no unit: "128 STEP" does not fit a card, the label says LEN) */
         break;
     default:
         if (d->names) {                               /* F_INT with a 0-terminated name list: the range */

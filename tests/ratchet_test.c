@@ -176,13 +176,13 @@ static int projects(void)
     bad += check("  x4 is bit 7 of the velocity and the chance bytes", (packed.raw[pos + 5] & 128u) && (packed.raw[pos + 8] & 128u) &&
                  (packed.raw[pos + 5] & 127u) == before.t[0].step[3].vel);
     for (k = 0; k < NTRK; k++)
-        for (i = 0; i < NSTEP; i++)
+        for (i = 0; i < NSTEP_REC; i++)
             trk[k].step[i].flags &= (uint8_t)~SF_RATCH;
     project_capture(&before);
     proj_pack(&packed, &before);
     ok = 1;
-    for (k = 0, pos = 68u; k < NTRK; k++, pos += P_COUNT + 2u + NSTEP * 9u)
-        for (i = 0; i < NSTEP; i++)
+    for (k = 0, pos = 68u; k < NTRK; k++, pos += P_COUNT + 2u + NSTEP_REC * 9u)
+        for (i = 0; i < NSTEP_REC; i++)
             ok &= packed.raw[pos + P_COUNT + 2u + i * 9u + 5u] < 128u && packed.raw[pos + P_COUNT + 2u + i * 9u + 8u] < 128u;
     bad += check("  a project without ratchets: every velocity and chance byte below 128, as firmware before wrote", ok);
     {   /* a FUN7 image (its tracks without patches) as firmware before RATCH wrote it: x1 */
@@ -195,7 +195,7 @@ static int projects(void)
         sum = proj_hash(old.raw, PROJ_STORE_V7 - 4u); memcpy(old.raw + PROJ_STORE_V7 - 4u, &sum, 4);
         ok = proj_import(&fun7, &old, PROJ_STORE_V7);
         for (k = 0; ok && k < NTRK; k++)
-            for (i = 0; i < NSTEP; i++)
+            for (i = 0; i < NSTEP_REC; i++)
                 ok &= step_ratchet(&fun7.t[k].step[i]) == 1u;
         bad += check("  FUN7 of before: every step x1", ok && fun7.t[0].step[1].flags == SF_ACCENT);
     }

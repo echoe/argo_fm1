@@ -563,9 +563,9 @@ static int follow_test(void)
         frames(300);
         k4 = key_at(0, 4);
         fm1_in.notes |= 1u << k4; host_notes |= 1u << k4; frame();
-        ok = grid_on() && lock_held() == (1u << 4);
+        ok = grid_on() && lock_held().w[0] == (1u << 4);
         queued(0x90, 60, 100, 1); frame();               /* T1's channel */
-        ok &= song.sel == 3u && lock_held() == (1u << 4) && midi_lit(0);
+        ok &= song.sel == 3u && lock_held().w[0] == (1u << 4) && midi_lit(0);
         turn(EN_K1, 3);
         ok &= motion_lock_count(t4) == 1u && !motion_lock_count(&trk[0]);
         fm1_in.notes &= ~(1u << k4); frame();

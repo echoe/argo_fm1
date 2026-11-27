@@ -24,9 +24,11 @@
  * yet converted are lost if the power is cut during a conversion (the defaults come back); nothing else is. */
 #if FELUCCA_PATBANK && FELUCCA_FLASH
 #define PB_META_FIX (PB_HDR + NTRK + PB_NSEQ + 2u * PB_NSEQ)
-#define PB_OLD_META_FIX (PB_HDR + 2u * PB_PAT_B + NTRK + PB_NSEQ + 2u * PB_NSEQ)
+#define PB_OLD_META_FIX (PB_HDR + 2u * PB_OLD_PAT_B + NTRK + PB_NSEQ + 2u * PB_NSEQ)
 #define PB_CPK_B ((1u + CPK_USER) * (uint32_t)sizeof(cpack_t))   /* the chord packs (chord.c), after the records */
-#define PB_META_RECS ((PB_OBJ_MAX - PB_META_FIX - PB_CPK_B) / 3u)
+#define PB_REC_B 3u                              /* an automation record on flash: place (track << 6 | step), id, value (as the project record's) */
+#define PB_UX_HDR 6u                             /* 1.9, the sections after the chord packs: 'U', 'X', 1, 0, the count (2 bytes), then per record 4 bytes: */
+#define PB_UX_REC 4u                             /* the sequence q (track * 8 + slot), the step (NSTEP_REC..127), id, value: the records of the steps from 64 up */
 /* The object's RAM is the project staging RAM (project.c proj_wire_u): a save, a load and the autosave already take turns with
  * it, and a backup noticing proj_wire_gen knows it was reused. It is not kept a 3.8 KB buffer of its own: the pool is full */
 #define pb_wire (proj_wire_u.raw)
@@ -35,148 +37,80 @@ _Static_assert(GS_N <= 4u && NTRK <= 4u, "the four bytes of an object's header")
 _Static_assert(PB_BM <= 16u, "a bitmap is at most 16 bytes");
 #define PB_WIRE_USE() (proj_wire_gen++)
 
-static uint32_t pb_records(void)            /* automation records the mirror holds outside the playing sequences */
+/* a record on flash (steps below NSTEP_REC: the 3 bytes the project record has) <-> as it is in RAM */
+static void pb_rec_put(uint8_t *d, const motion_event_t *e)
 {
-    uint32_t t, n = 0;
-    for (t = 0; t < PB_NSEQ; t++)
-        if (t % PB_N != pb_cur[t / PB_N])
-            n += pb_mo[t].count;
+    d[0] = (uint8_t)(MO_TRK(e->place) << 6 | MO_STEP(e->place));
+    d[1] = e->param;
+    d[2] = (uint8_t)e->value;
+}
+static void pb_rec_get(motion_event_t *e, const uint8_t *d)
+{
+    e->place = MO_PLACE(d[0] >> 6, d[0] & 63u);
+    e->param = d[1];
+    e->value = (int8_t)d[2];
+}
+static uint32_t pb_lo_n(uint32_t q)              /* sequence q's records on steps below NSTEP_REC (not playing: its mirror) */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < pb_mo[q].count && i < PB_MO_MAX; i++)
+        n += pb_mo[q].ev[i].step < NSTEP_REC;
     return n;
 }
-static int pb_meta_ok(void) { return pb_records() <= PB_META_RECS; }
-
-/* ---- sequences as lists ---- */
-static uint8_t pb_e[PB_STEP_B];             /* the empty step, packed */
-static uint8_t pb_e_ok;
-static void pb_e_init(void)
+static uint32_t pb_hi_n(void)                    /* the records from step NSTEP_REC up: of the sequences not playing, and of the playing ones (the live ones) */
 {
-    step_t z;
-    memset(&z, 0, sizeof z);
-    step_clear(&z);
-    pb_pack_step(pb_e, &z);
-    pb_e_ok = 1;
-}
-static void pb_pat_empty(uint8_t *pat)
-{
-    uint32_t i;
-    if (!pb_e_ok)
-        pb_e_init();
-    for (i = 0; i < NSTEP; i++)
-        memcpy(pat + i * PB_STEP_B, pb_e, PB_STEP_B);
-}
-/* a step's nine bytes without its note bytes when it has no notes (n = 0: they mean nothing; the nudge bits stay), so that an
- * emptied step (step_clear leaves its notes) is as empty as one never used */
-static void pb_canon(uint8_t *c, const uint8_t *b)
-{
-    uint32_t j;
-    memcpy(c, b, PB_STEP_B);
-    if ((b[4] & 7u) == 0u)
-        for (j = 0; j < 4u; j++)
-            c[j] &= 128u;
-}
-static uint32_t pb_pop(uint32_t m)
-{
-    uint32_t n = 0;
-    while (m) {
-        n += m & 1u;
-        m >>= 1;
-    }
+    uint32_t q, i, n = 0;
+    for (q = 0; q < PB_NSEQ; q++)
+        if (q % PB_N != pb_cur[q / PB_N])
+            for (i = 0; i < pb_mo[q].count && i < PB_MO_MAX; i++)
+                n += pb_mo[q].ev[i].step >= NSTEP_REC;
+    for (i = 0; i < motion.count; i++)
+        n += MO_STEP(motion.event[i].place) >= NSTEP_REC;
     return n;
 }
-static uint32_t pb_step_mask(const uint8_t *b)       /* which bytes differ from the empty step's (0: none, the step is empty) */
+static uint32_t pb_meta_bytes(void)              /* the meta object as pb_build writes it */
 {
-    uint32_t k, m = 0;
-    if (!pb_e_ok)
-        pb_e_init();
-    for (k = 0; k < 7u; k++)
-        if (b[k] != pb_e[k])
-            m |= 1u << k;
-    if (b[7] != pb_e[7] || b[8] != pb_e[8])
-        m |= 128u;
-    return m;
+    uint32_t q, lo = 0, hi = pb_hi_n();
+    for (q = 0; q < PB_NSEQ; q++)
+        if (q % PB_N != pb_cur[q / PB_N])
+            lo += pb_lo_n(q);
+    return PB_META_FIX + PB_REC_B * lo + PB_CPK_B + (hi ? PB_UX_HDR + PB_UX_REC * hi : 0u);
 }
-static uint32_t pb_mask_len(uint32_t m) { return 1u + pb_pop(m & 127u) + ((m & 128u) ? 2u : 0u); }
-static uint32_t pb_step_put(uint8_t *d, const uint8_t *b, uint32_t m)
-{
-    uint32_t k, n = 1u;
-    for (k = 0; k < 7u; k++)
-        if ((m >> k) & 1u)
-            d[n++] = b[k];
-    if (m & 128u) {
-        d[n++] = b[7];
-        d[n++] = b[8];
-    }
-    d[0] = (uint8_t)m;
-    return n;
-}
-static void pb_step_get(uint8_t *b, const uint8_t *d)   /* the mask byte at d, its bytes checked to be there */
-{
-    uint32_t k, n = 1u;
-    memcpy(b, pb_e, PB_STEP_B);
-    for (k = 0; k < 7u; k++)
-        if ((d[0] >> k) & 1u)
-            b[k] = d[n++];
-    if (d[0] & 128u) {
-        b[7] = d[n++];
-        b[8] = d[n++];
-    }
-}
-static uint32_t pb_seq_size(const uint8_t *pat)
-{
-    uint32_t i, n = 1u + PB_BM, m;
-    uint8_t c[PB_STEP_B];
-    for (i = 0; i < NSTEP; i++) {
-        pb_canon(c, pat + i * PB_STEP_B);
-        if ((m = pb_step_mask(c)) != 0u)
-            n += pb_mask_len(m);
-    }
-    return n;
-}
-static uint32_t pb_seq_put(uint8_t *d, const uint8_t *pat)
-{
-    uint32_t i, n = 1u + PB_BM, m;
-    uint8_t c[PB_STEP_B];
-    d[0] = (uint8_t)PB_BM;
-    memset(d + 1, 0, PB_BM);
-    for (i = 0; i < NSTEP; i++) {
-        pb_canon(c, pat + i * PB_STEP_B);
-        if ((m = pb_step_mask(c)) != 0u) {
-            d[1u + (i >> 3)] |= (uint8_t)(1u << (i & 7u));
-            n += pb_step_put(d + n, c, m);
-        }
-    }
-    return n;
-}
-/* a list -> pat; the bytes it took, 0 when it is none (too short, a bitmap of no size or too big) */
-static uint32_t pb_seq_get(uint8_t *pat, const uint8_t *d, uint32_t avail)
-{
-    uint32_t nb, i, n;
-    uint8_t tmp[PB_STEP_B];
-    pb_pat_empty(pat);
-    if (avail < 1u || d[0] == 0u || d[0] > 16u || 1u + d[0] > avail)
-        return 0;
-    nb = d[0];
-    n = 1u + nb;
-    for (i = 0; i < nb * 8u; i++)
-        if ((d[1u + (i >> 3)] >> (i & 7u)) & 1u) {
-            if (n >= avail || n + pb_mask_len(d[n]) > avail)
-                return 0;
-            pb_step_get(tmp, d + n);
-            n += pb_mask_len(d[n]);
-            if (i < NSTEP)
-                memcpy(pat + i * PB_STEP_B, tmp, PB_STEP_B);
-        }
-    return n;
-}
+static int pb_meta_ok(void) { return pb_meta_bytes() <= PB_OBJ_MAX; }
 
 /* ---- objects ---- */
 static uint32_t pb_track_size(uint32_t t)
 {
     uint32_t k, n = PB_HDR;
     for (k = 0; k < PB_N; k++)
-        n += pb_seq_size(pb_pat[t * PB_N + k]);
+        n += pb_list_size(t, k);
     return n;
 }
+
+/* 0..100: how full what holds the sequences is: the arena (the sequences not playing: a switch that finds it full is refused) or a
+ * track's flash object (its eight sequences: a SAVE that finds it full is refused), the fuller of the two. The header shows it
+ * (ui_draw.c); it is worked out again when the sequences changed (pb_gen) or the arena did */
+static uint32_t pb_use_pct(void)
+{
+    static uint32_t gen = ~0u, au = ~0u, worst;
+    uint32_t t, a = pb_aused();
+    if (gen != pb_gen || au != a) {
+        uint32_t empty = PB_HDR + PB_N * (1u + PB_BM);
+        gen = pb_gen;
+        au = a;
+        worst = (a * 100u + PB_ARENA_B - 1u) / PB_ARENA_B;
+        for (t = 0; t < NTRK; t++) {
+            uint32_t n = pb_track_size(t), p;
+            p = n > empty ? ((n - empty) * 100u + (PB_OBJ_MAX - empty) - 1u) / (PB_OBJ_MAX - empty) : 0u;
+            if (p > worst)
+                worst = p;
+        }
+        if (worst > 100u)
+            worst = 100u;
+    }
+    return worst;
+}
+
 static void pb_head(uint32_t kind)
 {
     memset(pb_wire, 0, PB_HDR);
@@ -197,7 +131,7 @@ static uint32_t pb_build(uint32_t o)
         for (k = 0; k < GS_N; k++)                      /* GEN's knobs of the track */
             pb_wire[4u + k] = gen_set[o][k];
         for (k = 0; k < PB_N; k++)
-            pos += pb_seq_put(pb_wire + pos, pb_pat[o * PB_N + k]);
+            pos += pb_list_put(pb_wire + pos, o, k);
         return pos;
     }
     for (q = 0; q < NTRK; q++)                          /* CHAIN: per track the mask of the chained sequences */
@@ -206,18 +140,51 @@ static uint32_t pb_build(uint32_t o)
     memcpy(pb_wire + pos, pb_len, PB_NSEQ); pos += PB_NSEQ;
     for (q = 0; q < PB_NSEQ; q++) {
         int on = q % PB_N != pb_cur[q / PB_N];
-        pb_wire[pos++] = on ? pb_mo[q].count : 0;
+        pb_wire[pos++] = on ? (uint8_t)pb_lo_n(q) : 0;
         pb_wire[pos++] = on ? pb_mo[q].on : 0;
     }
     for (q = 0; q < PB_NSEQ; q++)
-        if (q % PB_N != pb_cur[q / PB_N]) {
-            memcpy(pb_wire + pos, pb_mo[q].ev, pb_mo[q].count * sizeof(motion_event_t));
-            pos += pb_mo[q].count * (uint32_t)sizeof(motion_event_t);
-        }
+        if (q % PB_N != pb_cur[q / PB_N])
+            for (k = 0; k < pb_mo[q].count && k < PB_MO_MAX; k++)
+                if (pb_mo[q].ev[k].step < NSTEP_REC) {
+                    motion_event_t ev;
+                    pb_ev_to(&ev, q / PB_N, &pb_mo[q].ev[k]);
+                    pb_rec_put(pb_wire + pos, &ev);
+                    pos += PB_REC_B;
+                }
     memcpy(pb_wire + pos, &cpk, sizeof cpk); pos += (uint32_t)sizeof cpk;           /* the chord packs: what the black keys do, the user's */
     for (q = 0; q < CPK_USER; q++) {
         memcpy(pb_wire + pos, &cpk_user[q], sizeof(cpack_t));
         pos += (uint32_t)sizeof(cpack_t);
+    }
+    {   /* 1.9: the records of the steps from NSTEP_REC up (a project record and a firmware before hold none of them; they ignore this) */
+        uint32_t hi = pb_hi_n(), cnt = 0, i;
+        if (hi) {
+            pb_wire[pos] = 'U'; pb_wire[pos + 1u] = 'X'; pb_wire[pos + 2u] = 1; pb_wire[pos + 3u] = 0;
+            pb_wire[pos + 4u] = (uint8_t)hi; pb_wire[pos + 5u] = (uint8_t)(hi >> 8);
+            pos += PB_UX_HDR;
+            for (q = 0; q < PB_NSEQ; q++) {
+                int playing = q % PB_N == pb_cur[q / PB_N];
+                if (!playing)
+                    for (i = 0; i < pb_mo[q].count && i < PB_MO_MAX; i++) {
+                        const pb_ev_t *e = &pb_mo[q].ev[i];
+                        if (e->step >= NSTEP_REC && cnt < hi) {
+                            pb_wire[pos++] = (uint8_t)q; pb_wire[pos++] = e->step;
+                            pb_wire[pos++] = e->param; pb_wire[pos++] = (uint8_t)e->value;
+                            cnt++;
+                        }
+                    }
+                else
+                    for (i = 0; i < motion.count; i++) {
+                        const motion_event_t *e = &motion.event[i];
+                        if (MO_TRK(e->place) == q / PB_N && MO_STEP(e->place) >= NSTEP_REC && cnt < hi) {
+                            pb_wire[pos++] = (uint8_t)q; pb_wire[pos++] = (uint8_t)MO_STEP(e->place);
+                            pb_wire[pos++] = e->param; pb_wire[pos++] = (uint8_t)e->value;
+                            cnt++;
+                        }
+                    }
+            }
+        }
     }
     return pos;
 }
@@ -244,15 +211,15 @@ static int pb_old_seq(uint32_t s, uint32_t q, uint8_t *pat)
     if (!v || v[0] != 'P' || v[1] != 'B' || v[3] != o)
         return 0;
     if (o < PB_OLD_META_O) {
-        if ((v[2] != 1 && v[2] != 2) || len != PB_HDR + PB_PER * PB_PAT_B)
+        if ((v[2] != 1 && v[2] != 2) || len != PB_HDR + PB_PER * PB_OLD_PAT_B)
             return 0;
-        off = PB_HDR + (q % PB_PER) * PB_PAT_B;
+        off = PB_HDR + (q % PB_PER) * PB_OLD_PAT_B;
     } else {
         if (v[2] < 1 || v[2] > 3 || len < PB_OLD_META_FIX)
             return 0;
-        off = PB_HDR + (q - PB_PER * PB_OLD_META_O) * PB_PAT_B;
+        off = PB_HDR + (q - PB_PER * PB_OLD_META_O) * PB_OLD_PAT_B;
     }
-    memcpy(pat, v + off, PB_PAT_B);
+    memcpy(pat, v + off, PB_OLD_PAT_B);                 /* (the first NSTEP_REC steps: the rest stays empty) */
     return 1;
 }
 
@@ -298,9 +265,9 @@ static int pb_store_convert(uint32_t s)
     n = (uint32_t)st_load(base + PB_OLD_META_O, pb_wire, sizeof pb_wire);   /* the meta object: the old one without its two sequences */
     if ((int)n < (int)PB_OLD_META_FIX)
         return 0;
-    for (k = PB_HDR; k < n - 2u * PB_PAT_B; k++)        /* (the firmware's libc.c has no memmove: a forward copy, the destination is below the source) */
-        pb_wire[k] = pb_wire[k + 2u * PB_PAT_B];
-    n -= 2u * PB_PAT_B;
+    for (k = PB_HDR; k < n - 2u * PB_OLD_PAT_B; k++)        /* (the firmware's libc.c has no memmove: a forward copy, the destination is below the source) */
+        pb_wire[k] = pb_wire[k + 2u * PB_OLD_PAT_B];
+    n -= 2u * PB_OLD_PAT_B;
     if (pb_wire[2] < 2)                                 /* (version 1 had no chain masks) */
         memset(pb_wire + 4, 0, 4);
     pb_wire[2] = (uint8_t)PB_FMT;
@@ -359,6 +326,38 @@ static int pb_track_ok(uint32_t n)
     return 1;
 }
 
+/* the upper records (PB_UX_*) of the meta object in pb_wire (n bytes, its records end at `pos`): the section's offset, 0 none */
+static uint32_t pb_ux_pos(uint32_t n)
+{
+    uint32_t q, tot = 0, p, cnt;
+    for (q = 0; q < PB_NSEQ; q++)
+        tot += pb_wire[PB_HDR + NTRK + PB_NSEQ + 2u * q];
+    p = PB_META_FIX + PB_REC_B * tot + PB_CPK_B;
+    if (p + PB_UX_HDR > n || pb_wire[p] != 'U' || pb_wire[p + 1u] != 'X' || pb_wire[p + 2u] != 1u)
+        return 0;
+    cnt = pb_wire[p + 4u] | (uint32_t)pb_wire[p + 5u] << 8;
+    return p + PB_UX_HDR + PB_UX_REC * cnt <= n ? p : 0u;
+}
+static uint32_t pb_ux_count(uint32_t p) { return pb_wire[p + 4u] | (uint32_t)pb_wire[p + 5u] << 8; }
+
+/* a record of a playing sequence from the bank (step NSTEP_REC up) into the live automation: not twice, not past MOTION_MAX */
+static void pb_motion_add(const motion_event_t *e)
+{
+    uint32_t i, f;
+    if (!motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127)
+        return;
+    f = motion_guard();
+    for (i = 0; i < motion.count; i++)
+        if (motion.event[i].place == e->place && MOTION_ID(&motion.event[i]) == MOTION_ID(e))
+            break;
+    if (i == motion.count && motion.count < MOTION_MAX) {
+        motion.event[motion.count] = *e;
+        RING_PUBLISH();
+        motion.count++;
+    }
+    motion_unguard(f);
+}
+
 /* store s -> the mirror, after the music (steps, LEN, automation: the playing sequences) was loaded; 0: no such store
  * (the mirror holds just the loaded music, pb_reset_to_live) */
 static int pb_store_load(uint32_t s)
@@ -388,7 +387,7 @@ static int pb_store_load(uint32_t s)
             if (cnt[q] > PB_MO_MAX) return 0;
             tot += cnt[q];
         }
-        if (pos + tot * sizeof(motion_event_t) > n) return 0;
+        if (pos + tot * PB_REC_B > n) return 0;
     }
     for (t = 0; t < NTRK; t++)                          /* CHAIN: the masks */
         pb_cmask[t] = pb_wire[4u + t];
@@ -397,9 +396,27 @@ static int pb_store_load(uint32_t s)
         if (!cnt[q])
             continue;
         pb_mo[q].on = on[q] != 0u;
-        for (k = 0; k < cnt[q]; k++, pos += sizeof(motion_event_t))
-            memcpy(&pb_mo[q].ev[k], pb_wire + pos, sizeof(motion_event_t));
+        for (k = 0; k < cnt[q]; k++, pos += PB_REC_B)
+            { motion_event_t ev; pb_rec_get(&ev, pb_wire + pos); pb_ev_from(&pb_mo[q].ev[k], &ev); }
         pb_mo[q].count = cnt[q];
+    }
+    {   /* 1.9: the records from step NSTEP_REC up: of the sequences not playing into their mirror, of the playing ones into the live automation */
+        uint32_t ux = pb_ux_pos(n), j;
+        if (ux)
+            for (j = 0; j < pb_ux_count(ux); j++) {
+                const uint8_t *r = pb_wire + ux + PB_UX_HDR + PB_UX_REC * j;
+                uint32_t qq = r[0];
+                motion_event_t e;
+                if (qq >= PB_NSEQ || r[1] < NSTEP_REC || r[1] >= NSTEP)
+                    continue;
+                e.place = MO_PLACE(qq / PB_N, r[1]); e.param = r[2]; e.value = (int8_t)r[3];
+                if (qq % PB_N == cur[qq / PB_N])
+                    pb_motion_add(&e);
+                else if (pb_mo[qq].count < PB_MO_MAX && motion_param(MOTION_ID(&e))) {
+                    pb_ev_from(&pb_mo[qq].ev[pb_mo[qq].count++], &e);
+                    pb_mo[qq].on = on[qq] != 0u;
+                }
+            }
     }
     if (pos + PB_CPK_B <= n) {                          /* the chord packs (a store converted from format 1 / 2: the built in ones pb_reset_to_live set) */
         cpack_t pk[1u + CPK_USER];
@@ -415,12 +432,23 @@ static int pb_store_load(uint32_t s)
     }
     for (q = 0; q < PB_NSEQ; q++)
         pb_len[q] = len[q] >= (uint32_t)TP[P_SLEN].min && len[q] <= (uint32_t)TP[P_SLEN].max ? len[q] : (uint8_t)TP[P_SLEN].def;
+    memset(pb_asz, 0, sizeof pb_asz);                   /* (the arena: every sequence empty, the objects fill it) */
     for (t = 0; t < NTRK; t++) {                        /* the tracks' sequences; one that does not parse stays empty */
         n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + t, pb_wire, sizeof pb_wire);
         if ((int)n >= (int)PB_HDR && pb_hdr_ok(t) && pb_track_ok(n)) {
             pos = PB_HDR;
-            for (k = 0; k < PB_N; k++)
-                pos += pb_seq_get(pb_pat[t * PB_N + k], pb_wire + pos, n - pos);
+            for (k = 0; k < PB_N; k++) {
+                uint8_t pat[PB_PAT_B];
+                pos += pb_seq_get(pat, pb_wire + pos, n - pos);
+                if (k == cur[t]) {                      /* 1.9: the playing one: its steps from NSTEP_REC up are the bank's (the project record holds the first NSTEP_REC) */
+                    uint32_t i, f = motion_guard();
+                    for (i = NSTEP_REC; i < NSTEP; i++)
+                        if (!pb_unpack_step(&trk[t].step[i], pat + i * PB_STEP_B))
+                            step_clear(&trk[t].step[i]);
+                    motion_unguard(f);
+                } else
+                    (void)pb_mput(t * PB_N + k, pat);   /* (the arena full: the sequence is not kept) */
+            }
             for (k = 0; k < GS_N; k++)                  /* GEN's knobs */
                 gen_set[t][k] = pb_wire[4u + k] < 128u ? pb_wire[4u + k] : gen_set[t][k];
         }
@@ -428,6 +456,13 @@ static int pb_store_load(uint32_t s)
     for (t = 0; t < NTRK; t++) {            /* the sequence a track plays is the loaded music's (the record) */
         pb_cur[t] = cur[t];
         pb_mo[t * PB_N + cur[t]].count = 0;
+        {   /* 1.9: its LEN of 128 (the record holds 127) */
+            uint32_t qq = t * PB_N + cur[t], f = motion_guard();
+            if (trk[t].p[P_SLEN] >= (int16_t)LEN_REC && pb_len[qq] > LEN_REC)
+                trk[t].p[P_SLEN] = (int16_t)clamp((int32_t)pb_len[qq], TP[P_SLEN].min, TP[P_SLEN].max);
+            motion_unguard(f);
+        }
+        pb_rehash(t);
         pb_sync(t);
     }
     pb_dirty = PB_ALLOBJ;
@@ -472,10 +507,25 @@ static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_
     for (i = 0; i < qi; i++)
         skip += pb_wire[pos + 2u * i];
     cnt = pb_wire[pos + 2u * qi];
-    if (cnt && cnt <= PB_MO_MAX && pos + 2u * PB_NSEQ + (skip + cnt) * sizeof(motion_event_t) <= n) {
-        memcpy(mo->ev, pb_wire + pos + 2u * PB_NSEQ + skip * sizeof(motion_event_t), cnt * sizeof(motion_event_t));
+    if (cnt && cnt <= PB_MO_MAX && pos + 2u * PB_NSEQ + (skip + cnt) * PB_REC_B <= n) {
+        for (i = 0; i < cnt; i++)
+            { motion_event_t ev; pb_rec_get(&ev, pb_wire + pos + 2u * PB_NSEQ + (skip + i) * PB_REC_B); pb_ev_from(&mo->ev[i], &ev); }
         mo->count = (uint8_t)cnt;
         mo->on = pb_wire[pos + 2u * qi + 1u] != 0u;
+    }
+    {   /* 1.9: and the records from step NSTEP_REC up (for the sequence a project was saved on, only these: its others are in the project record) */
+        uint32_t ux = pb_ux_pos(n), j;
+        if (ux)
+            for (j = 0; j < pb_ux_count(ux) && mo->count < PB_MO_MAX; j++) {
+                const uint8_t *r = pb_wire + ux + PB_UX_HDR + PB_UX_REC * j;
+                if (r[0] != qi || r[1] < NSTEP_REC || r[1] >= NSTEP)
+                    continue;
+                mo->ev[mo->count].step = r[1];
+                mo->ev[mo->count].param = r[2];
+                mo->ev[mo->count].value = (int8_t)r[3];
+                mo->count++;
+                mo->on = mo->on || pb_wire[pos + 2u * qi + 1u] != 0u;
+            }
     }
     n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + k, pb_wire, sizeof pb_wire);
     if ((int)n < (int)PB_HDR || !pb_hdr_ok(k) || !pb_track_ok(n))

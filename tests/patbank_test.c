@@ -53,10 +53,45 @@ static void fl_plain_window_init(void) {}
 #include "../firmware/src/project.c"
 #include "../firmware/src/patbank_store.c"
 
+/* 1.9: the banks are lists in an arena (patbank.c), the playing sequence the track's: this test keeps the dense view it always had
+ * (pb_pat) and moves it in (mir_store) before a save and out (mir_load) after a load */
+static uint8_t pb_pat[PB_NSEQ][PB_PAT_B];
+static void mir_store(void)
+{
+    uint32_t q;
+    for (q = 0; q < PB_NSEQ; q++) {
+        uint32_t i, any = 0;                                     /* (a row never filled is all zero: left as it is: empty) */
+        for (i = 0; i < PB_PAT_B; i++)
+            any |= pb_pat[q][i];
+        if (q % PB_N == pb_cur[q / PB_N]) {
+            if (any)
+                (void)pb_unpack_pat(trk[q / PB_N].step, pb_pat[q]);
+        } else if (any)
+            (void)pb_mput(q, pb_pat[q]);
+        else
+            pb_mempty(q);
+    }
+}
+static void mir_load(void)
+{
+    uint32_t q;
+    for (q = 0; q < PB_NSEQ; q++) {
+        if (q % PB_N == pb_cur[q / PB_N])
+            pb_pack_pat(pb_pat[q], trk[q / PB_N].step);
+        else
+            pb_mget(q, pb_pat[q]);
+    }
+}
+static int t_save(uint32_t s, uint32_t o) { mir_store(); return pb_store_save(s, o); }
+static int t_load(uint32_t s) { int r = pb_store_load(s); mir_load(); return r; }
+#define pb_store_save t_save
+#define pb_store_load t_load
+
+
 #define PB_BASE_END (OBJ_PB_BASE + OBJ_PB_N * 2u * ST_SECTOR)
 _Static_assert(PB_BASE_END <= 0xDC000u, "the sequence banks overrun the user preset banks");
 _Static_assert(PB_NOBJ * PB_NSTORE == OBJ_PB_N, "objects");
-_Static_assert(PB_HDR + PB_PER * PB_PAT_B <= ST_PAYLOAD_MAX, "an object does not fit a sector");
+_Static_assert(PB_HDR + PB_PER * PB_OLD_PAT_B <= ST_PAYLOAD_MAX, "an object does not fit a sector");
 _Static_assert(PB_META_FIX + 3u * 800u <= ST_PAYLOAD_MAX, "fewer than 800 automation records fit the last object");
 
 static int check(const char *what, int ok)
@@ -140,8 +175,9 @@ static uint32_t old_build(uint32_t o, uint32_t ver_meta)
             for (q = 0; q < NTRK; q++)
                 pb_wire[4u + q] = pb_cmask[q];
     }
-    memcpy(pb_wire + pos, pb_pat[o * PB_PER], n * PB_PAT_B);
-    pos += n * PB_PAT_B;
+    for (uint32_t qq = 0; qq < n; qq++)
+        memcpy(pb_wire + pos + qq * PB_OLD_PAT_B, pb_pat[o * PB_PER + qq], PB_OLD_PAT_B);   /* (the old formats held 64 steps) */
+    pos += n * PB_OLD_PAT_B;
     if (o == 5u) {
         memcpy(pb_wire + pos, pb_cur, NTRK); pos += NTRK;
         memcpy(pb_wire + pos, pb_len, PB_NSEQ); pos += PB_NSEQ;
@@ -152,8 +188,9 @@ static uint32_t old_build(uint32_t o, uint32_t ver_meta)
         }
         for (q = 0; q < PB_NSEQ; q++)
             if (q % PB_N != pb_cur[q / PB_N]) {
-                memcpy(pb_wire + pos, pb_mo[q].ev, pb_mo[q].count * sizeof(motion_event_t));
-                pos += pb_mo[q].count * (uint32_t)sizeof(motion_event_t);
+                for (uint32_t kk = 0; kk < pb_mo[q].count; kk++)
+                    pb_rec_put(pb_wire + pos + kk * PB_REC_B, &pb_mo[q].ev[kk]);
+                pos += pb_mo[q].count * PB_REC_B;
             }
         if (ver_meta >= 3u) {
             memcpy(pb_wire + pos, &cpk, sizeof cpk); pos += (uint32_t)sizeof cpk;
@@ -176,6 +213,14 @@ static void old_write(uint32_t s, uint32_t ver_meta)
     }
 }
 /* a music in the mirror: notes, hits and a few chords spread over the 32 sequences, every one of them different */
+static void trim_old(void)   /* the old formats held 64 steps a sequence: a store made to be written in one has no steps above */
+{
+    static uint8_t e[PB_PAT_B];
+    uint32_t q;
+    pb_pat_empty(e);
+    for (q = 0; q < PB_NSEQ; q++)
+        memcpy(pb_pat[q] + PB_OLD_PAT_B, e + PB_OLD_PAT_B, PB_PAT_B - PB_OLD_PAT_B);
+}
 static void fill_mirror(uint32_t seed, uint32_t per)
 {
     uint32_t q, i;
@@ -224,14 +269,14 @@ int main(void)
         ok = 1;
         for (i = 0; i < NSTEP; i++) {
             step_t *s = &trk[1].step[i];
-            s->n = (uint8_t)(i % 5u); s->time = (uint8_t)(i % 3u); s->flags = (uint8_t)(i & 3u); s->vel = (uint8_t)(i * 2u);
-            s->note[0] = (uint8_t)(i + 30u); s->note[1] = (uint8_t)(i + 31u); s->note[2] = (uint8_t)(i + 32u); s->note[3] = (uint8_t)(i + 33u);
+            s->n = (uint8_t)(i % 5u); s->time = (uint8_t)(i % 3u); s->flags = (uint8_t)(i & 3u); s->vel = (uint8_t)(i * 2u & 127u);
+            s->note[0] = (uint8_t)(i + 30u & 127u); s->note[1] = (uint8_t)(i + 31u & 127u); s->note[2] = (uint8_t)(i + 32u & 127u); s->note[3] = (uint8_t)(i + 33u & 127u);
             s->hit = (uint8_t)(i * 7u); s->acc = (uint8_t)(s->hit & (i * 3u)); s->probability = (uint8_t)(i % 102u);
         }
         project_capture(&proj_scratch);
         ok &= proj_pack(&out, &proj_scratch);
         pb_pack_pat(b, trk[1].step);
-        ok &= memmem(out.raw, sizeof out.raw, b, sizeof b) != 0;
+        ok &= memmem(out.raw, sizeof out.raw, b, PB_OLD_PAT_B) != 0;   /* (the record holds the first NSTEP_REC steps) */
         ok &= pb_unpack_pat(back, b) && !memcmp(back, trk[1].step, sizeof back);
         bad += check("a sequence's packed bytes are the project's own, and unpack gives the steps back", ok);
         memset(trk[1].step, 0, sizeof trk[1].step);
@@ -329,7 +374,7 @@ int main(void)
             for (q = 1; q < PB_N; q++) {
                 pb_mo[t * PB_N + q].count = PB_MO_MAX;
                 pb_mo[t * PB_N + q].on = 1;
-                for (i = 0; i < PB_MO_MAX; i++) { pb_mo[t * PB_N + q].ev[i].place = (uint8_t)(t << 6 | i); pb_mo[t * PB_N + q].ev[i].param = P_ATK; }
+                for (i = 0; i < PB_MO_MAX; i++) { pb_mo[t * PB_N + q].ev[i].step = (uint8_t)i; pb_mo[t * PB_N + q].ev[i].param = P_ATK; }
             }
         ok = !pb_meta_ok() && project_save_as(0, "FULL") != 0 && !strcmp(ui.msg, "AUTOMATION FULL") && !project_used(0);
         bad += check("more automation than the store holds: SAVE says AUTOMATION FULL and writes nothing", ok);
@@ -573,8 +618,11 @@ int main(void)
 
     {   /* the sparse format: sizes */
         const uint8_t *v;
-        uint32_t len, t2;
+        uint32_t len, t2, i2;
         reset();
+        for (t2 = 0; t2 < NTRK; t2++)                                                    /* (the playing sequences are the tracks' steps: empty ones) */
+            for (i2 = 0; i2 < NSTEP; i2++)
+                step_clear(&trk[t2].step[i2]);
         ok = pb_store_save(0, PB_ALLOBJ) == 0;
         for (t2 = 0; t2 < NTRK; t2++) {
             v = st_view(OBJ_PB0 + t2, &len);
@@ -585,7 +633,7 @@ int main(void)
         fill_mirror(1, 12);                                                              /* 12 steps in every sequence */
         ok &= pb_store_save(1, PB_ALLOBJ) == 0;
         v = st_view(OBJ_PB0 + PB_NOBJ + 2u, &len);
-        ok &= v && len > 8u * 40u && len < 8u * (9u + 12u * 6u) + 8u && len <= 8u + 8u * (9u + 12u * 7u);
+        ok &= v && len > 8u * 40u && len < 8u * (1u + PB_BM + 12u * 7u) + 8u;   /* (12 steps of up to 7 bytes: the steps of 128 collide less than those of 64) */
         bad += check("sparse sequence banks: an empty store is 80 bytes a track, 12 steps a sequence about 0.6 KB; the sixth object is not used", ok);
     }
     {   /* round trip, a store, its gen settings, chain masks, automation and chord packs; a step that was emptied is as empty as a new one */
@@ -596,7 +644,7 @@ int main(void)
         pb_cur[1] = 3; pb_cur[2] = 6;
         eq_cur[0] = 0; eq_cur[1] = 3; eq_cur[2] = 6; eq_cur[3] = 0;
         gen_set[2][1] = 77; gen_set[0][3] = 5; pb_cmask[1] = 0x0Cu;
-        pb_mo[10].count = 2; pb_mo[10].on = 1; pb_mo[10].ev[0].place = 3; pb_mo[10].ev[1].place = 9;
+        pb_mo[10].count = 2; pb_mo[10].on = 1; pb_mo[10].ev[0].step = 3; pb_mo[10].ev[1].step = 9;
         cpk.strum = 21; cpk_user[2].strum = 9;
         { step_t *z = (step_t *)0; (void)z; }
         pb_pat[5][0] = 77; pb_pat[5][4] = 0;                          /* (a step of no notes with a stale note byte) */
@@ -606,7 +654,7 @@ int main(void)
         pb_clear_all();
         ok &= pb_store_load(2) == 1 && pats_equal((const uint8_t (*)[PB_PAT_B])pb_pat, (const uint8_t (*)[PB_PAT_B])keep);
         ok &= gen_set[2][1] == 77 && gen_set[0][3] == 5 && pb_cmask[1] == 0x0Cu && pb_cur[1] == 3 && pb_cur[2] == 6 &&
-              pb_mo[10].count == 2 && pb_mo[10].ev[1].place == 9 && cpk.strum == 21 && cpk_user[2].strum == 9;
+              pb_mo[10].count == 2 && pb_mo[10].ev[1].step == 9 && cpk.strum == 21 && cpk_user[2].strum == 9;
         for (q2 = 0; q2 < PB_NSEQ; q2++)
             ok &= q2 % PB_N == eq_cur[q2 / PB_N] || pb_len[q2] == (uint8_t)(8u + (q2 * 5u + 3u) % 57u);
         bad += check("sparse sequence banks: the sequences, LENs, GEN, CHAIN masks, automation and chord packs come back", ok);
@@ -631,11 +679,11 @@ int main(void)
         uint32_t s2, ver, q2;
         for (ver = 1; ver <= 3u; ver++) {
             reset();
-            fill_mirror(ver, 25);
+            fill_mirror(ver, 25); trim_old();
             pb_cur[0] = 2; pb_cur[3] = 5;
             eq_cur[0] = 2; eq_cur[1] = 0; eq_cur[2] = 0; eq_cur[3] = 5;
             gen_set[1][2] = 31; gen_set[3][0] = 99; pb_cmask[2] = 0x13u;
-            pb_mo[9].count = 3; pb_mo[9].on = 1; pb_mo[9].ev[2].place = 7;
+            pb_mo[9].count = 3; pb_mo[9].on = 1; pb_mo[9].ev[2].step = 7;
             cpk.strum = 12;
             memcpy(keep, pb_pat, sizeof keep);
             s2 = ver - 1u;
@@ -646,7 +694,7 @@ int main(void)
             gen_set[1][2] = 1; gen_set[3][0] = 2; pb_cmask[2] = 0; cpk.strum = 3;
             ok &= pb_store_convert(s2) == 1 && pb_new_meta(s2) >= 0 && pb_store_convert(s2) == 1;
             ok &= pb_store_load(s2) == 1 && pats_equal((const uint8_t (*)[PB_PAT_B])pb_pat, (const uint8_t (*)[PB_PAT_B])keep);
-            ok &= pb_cur[0] == 2 && pb_cur[3] == 5 && pb_mo[9].count == 3 && pb_mo[9].ev[2].place == 7;
+            ok &= pb_cur[0] == 2 && pb_cur[3] == 5 && pb_mo[9].count == 3 && pb_mo[9].ev[2].step == 7;
             if (ver >= 2u) ok &= gen_set[1][2] == 31 && gen_set[3][0] == 99 && pb_cmask[2] == 0x13u;
             else ok &= pb_cmask[2] == 0;
             if (ver == 3u) ok &= cpk.strum == 12;
@@ -660,8 +708,8 @@ int main(void)
         static uint8_t keep[PB_NSEQ][PB_PAT_B], image[sizeof nor];
         uint32_t n2, cuts = 0, good = 1, s2 = 1, q2;
         reset();
-        fill_mirror(5, 30);
-        pb_cur[0] = 1; pb_cur[1] = 4; eq_cur[0] = 1; eq_cur[1] = 4; eq_cur[2] = 0; eq_cur[3] = 0; pb_mo[13].count = 2; pb_mo[13].on = 1; pb_mo[13].ev[0].place = 5;
+        fill_mirror(5, 30); trim_old();
+        pb_cur[0] = 1; pb_cur[1] = 4; eq_cur[0] = 1; eq_cur[1] = 4; eq_cur[2] = 0; eq_cur[3] = 0; pb_mo[13].count = 2; pb_mo[13].on = 1; pb_mo[13].ev[0].step = 5;
         memcpy(keep, pb_pat, sizeof keep);
         old_write(s2, 3);
         memcpy(image, nor, sizeof nor);
@@ -676,7 +724,7 @@ int main(void)
             memset(pb_pat, 0, sizeof pb_pat);
             pb_clear_all();
             good &= (uint32_t)pb_store_load(s2) == 1u && pats_equal((const uint8_t (*)[PB_PAT_B])pb_pat, (const uint8_t (*)[PB_PAT_B])keep);
-            good &= pb_mo[13].count == 2 && pb_mo[13].ev[0].place == 5 && pb_cur[1] == 4;
+            good &= pb_mo[13].count == 2 && pb_mo[13].ev[0].step == 5 && pb_cur[1] == 4;
             for (q2 = 0; q2 < PB_NSEQ; q2++)
                 good &= q2 % PB_N == eq_cur[q2 / PB_N] || pb_len[q2] == (uint8_t)(8u + (q2 * 5u + 5u) % 57u);
         }
@@ -685,7 +733,7 @@ int main(void)
     {   /* pb_convert_all: every store; again it writes nothing; SAVE over an old store writes it whole; the sixth objects are free */
         uint32_t s2, e0, free6 = 1;
         reset();
-        fill_mirror(7, 15);
+        fill_mirror(7, 15); trim_old();
         for (s2 = 0; s2 < PB_NSTORE; s2++)
             old_write(s2, 3);
         pb_convert_all();
@@ -696,7 +744,7 @@ int main(void)
         pb_convert_all();
         ok &= erases == e0;
         reset();
-        fill_mirror(8, 15);
+        fill_mirror(8, 15); trim_old();
         old_write(0, 3);
         pb_dirty = 0;
         ok &= pb_store_save(0, 1u << 2) == 0 && pb_new_meta(0) >= 0;      /* (one object asked for: the whole store, in order) */
@@ -712,7 +760,7 @@ int main(void)
         static uint8_t keep[PB_NSEQ][PB_PAT_B];
         uint8_t cur2[NTRK];
         reset();
-        fill_mirror(11, 18);
+        fill_mirror(11, 18); trim_old();
         eq_cur[0] = eq_cur[1] = eq_cur[2] = eq_cur[3] = 0;
         memcpy(keep, pb_pat, sizeof keep);
         old_write(3, 3);

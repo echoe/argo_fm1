@@ -374,12 +374,12 @@ static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t fu
     }
     for (i = j = 0; i < motion.count && j < n; i++) {
         const motion_event_t *e = &motion.event[i];
-        if ((e->place >> 6) != k) continue;
-        ed_b(e->place & 63u); ed_b(MOTION_ID(e)); ed_v(e->value);
+        if (MO_TRK(e->place) != k) continue;
+        ed_b(MO_STEP(e->place)); ed_b(MOTION_ID(e)); ed_v(e->value);
         j++;
     }
     for (i = j = 0; kinds && i < motion.count && j < n; i++)
-        if ((motion.event[i].place >> 6) == k) {
+        if (MO_TRK(motion.event[i].place) == k) {
             ed_b((motion.event[i].param & MOTION_LOCK) != 0u);
             j++;
         }
@@ -457,7 +457,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             else if (a[1] == 3u) rc = motion_set_event(t, a[2], a[3], (int16_t)ed_rv(a + 4));
             else if (a[1] == 4u && a[2] < NSTEP && motion_param(a[3])) motion_delete_event(t, a[2], a[3]);
             else if (a[1] == 5u) rc = motion_set_lock(t, a[2], a[3], (int16_t)ed_rv(a + 4));
-            else if (a[1] == 6u && (a[2] < NSTEP || a[2] == 127u)) (void)motion_clear_locks(t, a[2]);
+            else if (a[1] == 6u && (a[2] < NSTEP || a[2] == 127u)) (void)motion_clear_locks(t, a[2] == 127u ? NSTEP : a[2]);   /* (127: every step, as before; 1.9: step 128 cannot be named, a byte is 7 bits) */
             else rc = 1;
             ui.force = 1;
         }
@@ -469,7 +469,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(NENGINES);
         ed_b(P_COUNT);
         ed_b(G_COUNT);
-        ed_b(NSTEP);
+        ed_b(NSTEP_REC);                                /* (1.9: 128 steps a sequence; this byte is 7 bits: the editor sees the first 64, as before) */
         ed_b(P_E0);
         for (i = 0; i < NENGINES; i++)
             ed_str(ENGINES[i]->name, 8);

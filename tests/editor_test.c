@@ -133,7 +133,11 @@ static int motion_locks(void)
     a[1] = 7; n = request(ED_MOTION, a, 2);
     bad += check("MOTION op 7: the query with the kinds", n == 5u + 5u + 2u * 4u + 2u + 1u && host_wire[19] == 1);
     a[1] = 5; a[2] = 64; n = request(ED_MOTION, a, 6);
-    bad += check("MOTION op 5 refuses step 64 (rc 1)", host_wire[6] == 1);
+    if (NSTEP > 64) {                       /* (1.9: 128 steps: step 64 is a step; a byte is 7 bits: 127 the last) */
+        bad += check("MOTION op 5 on step 65 (a sequence has 128): set (rc 0)", host_wire[6] == 0);
+        (void)motion_clear_locks(&trk[1], 64);
+    } else
+        bad += check("MOTION op 5 refuses step 64 (rc 1)", host_wire[6] == 1);
     a[1] = 6; a[2] = 2; request(ED_MOTION, a, 3);
     bad += check("MOTION op 6 on step 2: its automation event stays", host_wire[6] == 0 && host_wire[8] == 2);
     a[2] = 127; request(ED_MOTION, a, 3);

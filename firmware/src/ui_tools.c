@@ -50,21 +50,21 @@ static void tl_undo_take(track_t *t)
 }
 
 /* steps 1..len of t that are not empty (a REST); after the action the ones emptied lose their locks */
-static uint64_t tl_used_of(const step_t *s, uint32_t len)
+static sset_t tl_used_of(const step_t *s, uint32_t len)
 {
-    uint64_t m = 0;
+    sset_t m = ss_none();
     uint32_t i;
     for (i = 0; i < len; i++)
         if (s[i].time != ST_REST)
-            m |= (uint64_t)1 << i;
+            m = ss_or(m, ss_bit(i));
     return m;
 }
-static uint64_t tl_used(const track_t *t, uint32_t len) { return tl_used_of(t->step, len); }
-static void tl_unlock(track_t *t, uint64_t was, uint32_t len)
+static sset_t tl_used(const track_t *t, uint32_t len) { return tl_used_of(t->step, len); }
+static void tl_unlock(track_t *t, sset_t was, uint32_t len)
 {
     uint32_t i;
     for (i = 0; i < len; i++)
-        if (((was >> i) & 1u) && t->step[i].time == ST_REST)
+        if (ss_has(was, i) && t->step[i].time == ST_REST)
             (void)motion_clear_locks(t, i);
 }
 
@@ -80,8 +80,8 @@ static void tl_order(track_t *t, uint32_t len, const uint8_t *src)
     f = motion_guard();
     for (j = 0; j < motion.count; j++) {
         motion_event_t *e = &motion.event[j];
-        if ((e->place >> 6) == k && (e->place & 63u) < len)
-            e->place = (uint8_t)(k << 6 | to[e->place & 63u]);
+        if (MO_TRK(e->place) == k && MO_STEP(e->place) < len)
+            e->place = MO_PLACE(k, to[MO_STEP(e->place)]);
     }
     motion_unguard(f);
 }
@@ -469,8 +469,8 @@ static void eu_close(track_t *t, int apply)
 }
 
 /* ------------------------------------------------------- DOUBLE, HALF --- */
-/* 1.5.5 (#85): D5 DOUBLE: steps 1..LEN once more after them (LEN + 1 .. 2 x LEN, at most the 64 steps: from LEN 33 on
- * only the first 64 - LEN steps fit) and LEN x2, the steps whole (notes, ties, hits, accents, CHANCE / conditions, RATCH,
+/* 1.5.5 (#85): D5 DOUBLE: steps 1..LEN once more after them (LEN + 1 .. 2 x LEN, at most NSTEP steps (1.9: 128; 64 before): from LEN NSTEP / 2 + 1 on
+ * only the first NSTEP - LEN steps fit) and LEN x2, the steps whole (notes, ties, hits, accents, CHANCE / conditions, RATCH,
  * NUDGE, VEL) with their automation and locks (a copy each; what was stored past LEN where the copy goes is replaced).
  * A note tied over the loop's end ties into the copy as it tied into step 1. E5 HALF: LEN / 2 (rounded down), the steps
  * of the second half cleared with their automation and locks (a note tied into it ends at the new LEN). Both one undo
@@ -487,15 +487,15 @@ static int tl_motion_plan(track_t *t, uint32_t lo, uint32_t hi, uint32_t cn, uin
     tl_mo.on = motion.on & (uint8_t)(1u << k);
     for (i = 0; i < motion.count; i++) {
         const motion_event_t *e = &motion.event[i];
-        uint32_t s = e->place & 63u;
-        if ((e->place >> 6) != k || (s >= lo && s < hi))
+        uint32_t s = MO_STEP(e->place);
+        if (MO_TRK(e->place) != k || (s >= lo && s < hi))
             continue;
         if (n < MOTION_MAX) tl_mo.event[n] = *e;
         n++;
         if (s < cn) {
             if (n < MOTION_MAX) {
                 tl_mo.event[n] = *e;
-                tl_mo.event[n].place = (uint8_t)(k << 6 | (s + by));
+                tl_mo.event[n].place = MO_PLACE(k, (s + by));
             }
             n++;
         }
@@ -511,7 +511,10 @@ static uint32_t tl_nl(uint32_t len) { return 2u * len < NSTEP ? 2u * len : NSTEP
 static int tl_resize_ok(track_t *t, uint32_t p, uint32_t len)
 {
     if (p == TL_DOUBLE && len >= NSTEP) {
-        ui_message("64 STEPS: NO ROOM");
+        char b[24];
+        fmt_int(b, NSTEP);
+        str_cpy(b + str_len(b), " STEPS: NO ROOM", (uint32_t)(sizeof b - str_len(b)));
+        ui_message(b);
         return 0;
     }
     if (p == TL_HALF && len < 2u) {
@@ -551,7 +554,7 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
 {
     static char b[24];
     uint32_t len = tl_len(t), i, n = 0;
-    uint64_t was = tl_used(t, len);
+    sset_t was = tl_used(t, len);
     int drum = drum_track(t);
     const char *msg = 0;
     l %= NLANE;
