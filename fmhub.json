@@ -1,5 +1,5 @@
 {
-  "what": "An LLM-written expansion of Felucca with eight patterns per track, pattern chaining (up to 512 steps/pattern), per-step patch switching, multiple new chord modes, generative arpeggiator, new synth engines LEAD and SH-DRUM, borrowed engines SWARM, FM-TONE, and WAVETONE from Mini-Tone, new effects TAPE COMB and DJFX LOOP, and no samples.",
+  "what": "A Felucca expansion. 8 patterns/track, 128 steps/pattern, pattern chain, per-step patch switch, chord modes, generative arp, LEAD (Nord), SH-DRUM (SH-4d), SWARM, FM-TONE, and WAVETONE (@ Mini-Tone) synths, added effects. No samples.",
   "author": "echoe",
   "kinds": ["groove"],
   "play": "https://joakimeriksson.github.io/fm1-emu/?fw=argo",
