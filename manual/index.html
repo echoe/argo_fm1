@@ -138,6 +138,8 @@
 </li>
 <li>No samples.
 </li></ul>
+<p>Pictures of the new features, which may be worth a thousand words:</p>
+<p>&lt;img src="docs/pics/patterns.png" width="200" height="200" /&gt; &lt;img src="docs/pics/preset_swap.png" width="200" height="200" /&gt; &lt;img src="docs/pics/generative_arp.png" width="200" height="200" /&gt; &lt;img src="docs/pics/chord.png" width="200" height="200" /&gt;</p>
 <p>We'll go through these in order.</p>
 <h2 id="sequences-within-tracks">Sequences within tracks</h2>
 <p>Each track plays one of eight sequences. A sequence has its own steps, its own length, and its own automation and parameter locks (up to 64 records while it is not the one playing). DIV, SWING, GATE, QUANTIZE and the sound engine are set per track and you can't have different settings per sequence for them. The page that shows this is at the end of the SEQ menu. The P1 - P4 knobs pick the sequence for each track that is both being played and edited: sequences are listed top-down.</p>
@@ -250,7 +252,13 @@
 </li>
 <li>Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
 </li>
-<li>Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
+<li>Pulse width is Synth1's: the ENV section's second page, SHP, is the static width (+63 is square, 0 is Synth1's default 25%, -64 the narrowest). The LFO's SHP and the mod envelope's PW destination move it from there by a share of the room left on that side, as Synth1's. (This changed: before, SHP was an envelope amount around a square wave.)
+</li>
+<li>FLT MIX page: Saturation (SAT) and the filter envelope's Amount (FAMT, -64..+63; 0 is off, +-64 sweeps the whole range, as Synth1's). FLT ENV page: its own ADSR for the cutoff (Attack, Decay, Sustain, Release). It is added to the track's ENV -&gt; FLT (the amp ADSR's), so set that to 0 to hear it alone.
+</li>
+<li>The mod envelope's FM destination follows the decay in dB and moves FM by a share of the room left, as Synth1's.
+</li>
+<li>Synth1 patches: in the web editor's LEAD tab, "Import .sy1" reads one or several Synth1 patches and "Send to LEAD" converts the selected one onto the track. Oscillators, filter, envelopes, mod envelope, LFO 1, unison and glide are converted; each field shows how sure the mapping is, and what has no LEAD equivalent (arpeggiator, EQ, effect, OSC 1 detune copies, key shift...) is listed. The mapping was measured against Synth1's engine (fm1-sy1's <code>s1render</code>): <code>tools/sy1_ab.py</code> renders 49 test patches through both and compares level over time and spectrum, <code>tools/sy1_calibrate.py</code> finds the best LEAD value for a Synth1 one (see the tools' headers; <code>tests/sy1_render.c</code> is the LEAD side).
 </li></ul>
 <p>SH-TONE controls/features in depth:</p>
 <ul>
@@ -284,7 +292,7 @@
 <h2 id="tips-and-tricks">Tips and tricks</h2>
 <p>If you don't know why something is happening to your sound, there are a few places to check.</p>
 <ul>
-<li>FX, especially Slicer - make sure it isn't on.
+<li>FX, especially Slicer - make sure they aren't on.
 </li>
 <li>Arp - make sure the generative mode isn't on if it shouldn't be.
 </li>
@@ -297,11 +305,43 @@
 <li>If your chord mode is not playing a chord, make sure your preset isn't a mono, legato, or unison preset! You can check on the 'VOICE' page when editing the synth: usually this will be the third-to-last page.
 </li>
 <li>If you set automation and it is not saved, or it's taking up too many commands, you can use OCT+ on the AUTOMATION page under SEQ to swap between LOCK and AUTO. LOCK will only lock it at the specific step: AUTO will keep your change for the rest of the sequence.
+</li>
+<li>Quantize is set on by default and deletes all of your nudges. If you want some interestingly-spaced sounds, turn it off!!! It's the second row on the AUTO page.
+</li>
+<li>If you want to, e.g., lock an FX, set FX Latch mode to ON in the second page of the Menu. FX settings (including DJ mode) will remain on with that.
 </li></ul>
 <h2 id="changelog">Changelog</h2>
-<p>Really should've had this before, oops. 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that. 1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay 1.8.1 - added page for preset swaps, tape insert effect, tweaked SHDRUM engine, 16 user patch slots, new flash support, bugs and labels 1.7.0 - rename to Argo, fully removed sample engines and samples, added Mini-Tone engines (FMTONE, SWARM, WAVETONE), added DRUM-X from JIANT, added preset change per step, added SH-DRUM engine, added granular insert effect 1.6.1_and_sequences - tweaked generative arp settings, chord mode location, strum time settings 1.6.1_and_sequences - added a generative arpeggiator and a chord mode. 1.5.1_and_sequences - first release, Felucca 1.5.1 but with sequences and not with user samples.</p>
+<ul>
+<li>1.8.6 - Sequence banks store notes in list format. 128 steps/pattern but it has to be lossy - there's % in the top right that says how filled the patterns are. LEAD engine updates to make the engine more accurate and well laid out. More functional synth1 preset import to LEAD presets. DJFX knob direction bugfix. Argo MIDI advertisement.
+</li>
+<li>1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
+</li>
+<li>1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
+</li>
+<li>1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
+</li>
+<li>1.8.2 - adding the rest of my desired features in todos - cleaning up some build parameter things and making sure everything works okay
+</li>
+<li>1.8.1 - added page for preset swaps, tape insert effect, tweaked SHDRUM engine, 16 user patch slots, new flash support, bugs and labels
+</li>
+<li>1.7.0 - rename to Argo, fully removed sample engines and samples, added Mini-Tone engines (FMTONE, SWARM, WAVETONE), added DRUM-X from JIANT, added preset change per step, added SH-DRUM engine, added granular insert effect
+</li>
+<li>1.6.1_and_sequences - tweaked generative arp settings, chord mode location, strum time settings
+</li>
+<li>1.6.1_and_sequences - added a generative arpeggiator and a chord mode.
+</li>
+<li>1.5.1_and_sequences - first release, Felucca 1.5.1 but with sequences and not with user samples.
+</li></ul>
 <h2 id="thats-it">That's it!</h2>
 <p>If you have any requests or suggestions, please feel free to let me know!</p>
+<h2 id="todo">Todo</h2>
+<ul>
+<li>possibly set QUANTIZE off by default? note: to do this, just set P_SQNT to 1 in params.c, then fix tests to expect that
+</li>
+<li>continuing to see if opx4 synth can be added ... it has so many variables, it's difficult
+</li>
+<li>rearchitect to base on new project branching off of felucca, which can then build everywhere instead of just the fm-1. this will probably be argo 2.0 if/when I get there. I would like to get all of the features buttoned down first.
+</li></ul>
 </main>
 </body>
 </html>
