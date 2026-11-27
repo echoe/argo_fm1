@@ -47,8 +47,11 @@
                                     * main.c turns 2ND CORE off), not a restart: as Felucca's own second core did */
 #define FM1_CRASH_CTX_N 1u         /* chip/fm1_irq.h: the registers of the last crash only (80 B of .noinit; four would
                                     * not fit beside the project slots) */
+#ifndef FELUCCA_USB_PRODUCT
+#define FELUCCA_USB_PRODUCT "Argo FM-1"
+#endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.8.2" /* shown in the menu, the console and the editor; build.py --release X.Y */
+#define FELUCCA_VERSION "v1.8.6" /* shown in the menu, the console and the editor; build.py --release X.Y */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
