@@ -11,7 +11,10 @@
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
 #define NPART 4                  /* synth parts: tracks 1..4 */
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
-#define NSTEP 64
+#ifndef NSTEP
+#define NSTEP 128                /* steps per sequence (a track holds one, patbank.c eight): 1.9 128, 64 before. Up to 128 (the place of a motion record) */
+#endif
+_Static_assert(NSTEP >= 64 && NSTEP <= 128 && NSTEP % 32 == 0, "NSTEP: 64..128 (motion records: 7 bits of step; project.c / patbank.c store 64 and up)");
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
 #ifndef FELUCCA_DRUMX
 #define FELUCCA_DRUMX 1          /* the DRUM engine's sound is DRUM-X (drumx_voice.c, ported from JIANT: eight synthesized lanes, two patches and a MORPH,
@@ -299,7 +302,7 @@ static void step_set_nudge(step_t *s, int32_t v)
     s->flags = (uint8_t)((s->flags & ~SF_NUDGE) | (u & 7u) << 5 | (u >> 1 & 4u));
 }
 #define MOTION_MAX 128u          /* 1.2 (FUN10): 64 before */
-/* Four tracks x64 steps fit one byte. Values retain their signed parameter range (-64..127: an int8_t, 1.2).
+/* Four tracks x128 steps: the place is 9 bits (MO_PLACE). Values retain their signed parameter range (-64..127: an int8_t, 1.2).
  * param: the P_* id (< 128: P_COUNT is at most 127, project.c), bit 7 (MOTION_LOCK, 1.1) a parameter lock: the value
  * sounds on that step only and goes back after it (motion.c motion_step); without it an automation event, the
  * value holds until another one changes it. One record per (track, step, id), of either kind */
@@ -309,9 +312,24 @@ static void step_set_nudge(step_t *s, int32_t v)
                                   * voice mode). As a lock (MOTION_LOCK) the next step puts everything back as for any lock; Argo: as
                                   * automation (no MOTION_LOCK, AUTO) it holds to the end of the sequence (motion_pset_replay: and again after a lock on it). P_COUNT is at most 126 for it (project.c) */
 #define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
-typedef struct { uint8_t place, param; int8_t value; } motion_event_t;
+/* a set of steps (bit i: step i): the steps with a lock, the keys held on STEP, the steps of an undo (it was a uint64_t while a sequence had 64) */
+typedef struct { uint32_t w[NSTEP / 32u]; } sset_t;
+static inline sset_t ss_none(void) { sset_t s; uint32_t i; for (i = 0; i < NSTEP / 32u; i++) s.w[i] = 0; return s; }
+static inline sset_t ss_bit(uint32_t i) { sset_t s = ss_none(); if (i < NSTEP) s.w[i >> 5] = 1u << (i & 31u); return s; }
+static inline int ss_has(sset_t s, uint32_t i) { return i < NSTEP && ((s.w[i >> 5] >> (i & 31u)) & 1u); }
+static inline int ss_any(sset_t s) { uint32_t i, n = 0; for (i = 0; i < NSTEP / 32u; i++) n |= s.w[i]; return n != 0u; }
+static inline sset_t ss_or(sset_t a, sset_t b) { uint32_t i; for (i = 0; i < NSTEP / 32u; i++) a.w[i] |= b.w[i]; return a; }
+static inline sset_t ss_and(sset_t a, sset_t b) { uint32_t i; for (i = 0; i < NSTEP / 32u; i++) a.w[i] &= b.w[i]; return a; }
+static inline sset_t ss_andn(sset_t a, sset_t b) { uint32_t i; for (i = 0; i < NSTEP / 32u; i++) a.w[i] &= ~b.w[i]; return a; }
+static inline uint32_t ss_hash(sset_t s) { uint32_t i, h = 0; for (i = 0; i < NSTEP / 32u; i++) h = (h ^ s.w[i]) * 2654435761u; return h; }
+#define NSTEP_REC 64u                 /* steps a project record holds (project.c): the sequence banks keep the rest of the playing sequences (patbank_store.c) */
+#define LEN_REC 127u                  /* the LEN a project record holds (a parameter byte is -64..127); a LEN of 128 is 127 there and the bank says 128 */
+#define MO_TRK(p) ((uint32_t)(p) >> 7)          /* a record's place: the track in bits 7.., the step in bits 0..6 (1.9: 128 steps; it was track << 6 | step) */
+#define MO_STEP(p) ((uint32_t)(p) & 127u)
+#define MO_PLACE(k, s) ((uint16_t)((uint32_t)(k) << 7 | (uint32_t)(s)))
+typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
-_Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");
+_Static_assert(sizeof(motion_store_t) == 4u + 4u * MOTION_MAX, "motion RAM layout (the disk block is 3 bytes a record: project.c proj_motion_*)");
 #define CHAIN_ROWS 16u
 /* A song section (1.2, FUN10): the PROJECT slot each track plays (0..3, A..D; CHAIN_SILENT "-": that track plays
  * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot

@@ -390,7 +390,7 @@ static void test_stored(void)
     for (k = 0; k < NTRK; k++)
         ok &= b.t[k].p[P_ITYPE] == (int16_t)(k * 2u + 1u) && b.t[k].p[P_IMIX] == (int16_t)(100 + k) &&
               b.t[k].p[P_IC] == (int16_t)(30 + k);
-    ok &= 68u + NTRK * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_config_t) + sizeof(motion_store_t) + 4u == PROJ_FM6_OFF;
+    ok &= 68u + NTRK * (P_COUNT + 2u + NSTEP_REC * 9u) + sizeof(chain_config_t) + PROJ_MOTION_V10 + 4u == PROJ_FM6_OFF;
     ck("project: FUN10 round trip of the INSERT (114 parameters since 1.8, its motion), 4 spare bytes before the patches", ok);
     /* user presets: a record of 111 keeps them; one of 104 (1.2 .. 1.4) gets the INSERT OFF */
     memset(&r, 0, sizeof r);

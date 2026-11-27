@@ -37,7 +37,7 @@ const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-
 const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
-   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F, LDX,
+   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F, LDX, SY1,
    FM4, fromDigital, fromPerc, DRUM_KIT_E,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu,
@@ -1170,6 +1170,115 @@ async function editorLdx() {
   /* the engine's own table agrees (WAV1 4 shapes, FTYP 5 types, 32 factory sounds) */
   const lead = E.ENGINES_TABLE ? null : null;
   void lead;
+}
+
+/* Synth1 patches (SY1 in editor.html, tables from tools/gen_sy1_tables.py): the .sy1 text, the mapping to LEAD, the ranges */
+{
+  const N = E.SY1, T = N.T, S = N.S;
+  const text = (m, ver = 112, name = "Test Lead") => [name, `ver=${ver}`, ...Object.entries(m).map(([k, v]) => `${k},${v}`)].join("\r\n") + "\r\n";
+  const lead = (m, ver) => N.toLead(N.parse(text(m, ver)));
+  const get = (r, k) => r.set.find((x) => x.key === k)?.value;
+  const p = N.parse(text({ [S.OSC1_SHAPE]: 2, [S.F_FREQ]: 200, [S.OSC_MIX]: 99, 3: -9, junk: 1 }, 112, "Pad\u00e9 \u0001Name"));
+  ok(p.name === "Pad Name" && p.version === 112 && p.v[S.OSC1_SHAPE] === 2 && p.v[S.F_FREQ] === T.pmax[S.F_FREQ] && p.v[S.OSC_MIX] === 99 && p.v[3] === T.pmin[3] && p.count === 4,
+    "SY1: a .sy1 text parses: name line, ver=, id,value lines (CRLF), values clamped to their ranges, junk lines skipped");
+  ok(N.parse("x\nver=112\n").v.every((x, i) => x === T.pdef[i]), "SY1: a patch with no values is Synth1's init patch (the defaults)");
+  ok(T.pdef.length === 99 && T.legacyRules.length === 47 && T.legacyTab.length === 13 * 128 && T.attack_s.length === 128, "SY1: the generated tables have their sizes");
+  /* the same parse as fm1-sy1's own JS (a checkout via FM1_SY1_DIR), old versions included */
+  if (process.env.FM1_SY1_DIR && existsSync(join(process.env.FM1_SY1_DIR, "app/web/emu/app.js"))) {
+    const ref = await import(join(process.env.FM1_SY1_DIR, "app/web/emu/app.js"));
+    let same = true, seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) >> 8;
+    for (const ver of [0, 100, 105, 106, 107, 108, 109, 112]) for (let n = 0; n < 40; n++) {
+      const m = {};
+      for (let i = 0; i < 99; i++) if (rnd() % 3) m[i] = (rnd() % 200) - 30;
+      const a = N.parse(text(m, ver)), b = ref.parseSy1(new TextEncoder().encode(text(m, ver)));
+      same &&= eq(a.v, Array.from(b.values)) && a.version === b.version;
+    }
+    ok(same, "SY1: parse == fm1-sy1's parseSy1 on 320 random patches of every version (the legacy conversion included)");
+  }
+  /* the one-to-one fields */
+  let r = lead({ [S.OSC1_SHAPE]: 3, [S.OSC2_SHAPE]: 4, [S.OSC_MIX]: 77, [S.OSC2_SYNC]: 1, [S.OSC2_RING]: 1, [S.FTYPE]: 4, [S.MOD_DEST]: 2, [S.PW]: 64, [S.SUB_SHAPE]: 2, [S.SUB_GAIN]: 50, [S.FM]: 12 });
+  ok(get(r, "E0") === 3 && get(r, "E1") === 3 && get(r, "E4") === 77 && get(r, "E5") === 3 && get(r, "FTYP") === 4 && get(r, "MDST") === 2 && get(r, "EDSHP") === 0
+     && get(r, "SUBW") === 2 && get(r, "SUB") === 50 && get(r, "FM") === 12,
+    "SY1: the shared enumerations map one to one (waves, mix, sync + ring, filter type, mod dest, pulse width 64 = SHP 0, sub, FM)");
+  r = lead({ [S.PW]: 127 });
+  ok(get(r, "EDSHP") === 63 && get(lead({ [S.PW]: 0 }), "EDSHP") === -64, "SY1: pulse width 127 (square) is ENV SHP +63, 0 the narrowest -64");
+  /* the cutoff law: LP12 16.7 Hz x 2^(c / 12.624), ladder types the measured table; LEAD's 30 Hz .. 16 kHz */
+  const cutOf = (c, ft, kbd = 0) => get(lead({ [S.F_FREQ]: c, [S.FTYPE]: ft, [S.F_KBD]: kbd }), "E6"), argoHz = (v) => 30 * Math.pow(16000 / 30, v / 127);
+  let lawOk = true;
+  for (const c of [20, 40, 64, 90, 110]) {
+    for (const [ft, hz] of [[0, 16.7 * Math.pow(2, c / 12.624)], [1, T.ladder_hz[c]]])
+      if (hz >= 30 && hz <= 16000) lawOk &&= Math.abs(Math.log2(argoHz(cutOf(c, ft)) / hz)) < 0.05;   /* (outside LEAD's 30 Hz .. 16 kHz it clamps) */
+  }
+  ok(lawOk, "SY1: the cutoff keeps its frequency (LP12 by Synth1's law, LP24 / LPDL by the ladder table; within 1/20 octave)");
+  /* envelope times: attack linear in ms, decay / release by 4.6 time constants, in LEAD's 1 ms .. 10 s law; sustain by the table */
+  const tms = (v) => Math.pow(10, 4 * v / 127);
+  r = lead({ [S.A_ATK]: 40, [S.A_DEC]: 60, [S.A_REL]: 80, [S.A_SUS]: 90 });
+  ok(Math.abs(Math.log(tms(get(r, "ATK")) / (1000 * T.attack_s[40]))) < 0.15 && Math.abs(Math.log(tms(get(r, "DEC")) / (4600 * T.env_tau_s[60]))) < 0.15
+     && Math.abs(Math.log(tms(get(r, "REL")) / (4600 * T.env_tau_s[80]))) < 0.15 && get(r, "SUS") === Math.round(127 * T.amp_sustain[90]), "SY1: amp attack / decay / release keep their time (within 15 %), sustain its level");
+  ok(r.skipped.every((x) => x.name !== "Envelope times"), "SY1: times inside LEAD's range raise no warning");
+  r = lead({ [S.A_REL]: 127, [S.A_ATK]: 127 });
+  ok(get(r, "REL") === 127 && get(r, "ATK") === 127 && r.skipped.some((x) => x.name === "Envelope times"), "SY1: a time past 10 s is clamped and listed");
+  /* the filter envelope: amount 64 = 0, the sign kept, the end point kept in Synth1's -2 .. 125 (a high base cutoff leaves little to open) */
+  const fa = (amt, c) => get(lead({ [S.F_AMT]: amt, [S.F_FREQ]: c, [S.F_KBD]: 0 }), "FAMT");
+  ok(fa(64, 40) === 0 && fa(127, 40) > 0 && fa(0, 90) < 0 && fa(100, 40) > fa(80, 40) && fa(0, 90) >= -64 && fa(127, 40) <= 63 && Math.abs(fa(127, 120)) <= 3 && get(lead({}), "EDFLT") === 0,
+    "SY1: the filter envelope amount keeps its sign (64 = off) and its end point (125 at most: a cutoff of 120 opens by ~nothing), and ENV -> FLT of the amp ADSR is 0");
+  /* resonance: Synth1's is damped by 1 - r, LEAD's 2 - 1.85 res / 127: SVF types start about 68, the ladder at 0, both rising */
+  const resOf = (ft, rr) => get(lead({ [S.FTYPE]: ft, [S.F_RES]: rr }), "E7");
+  ok(resOf(0, 0) >= 60 && resOf(0, 0) <= 75 && resOf(1, 0) === 0 && [0, 1, 2, 3].every((ft) => { let prev = -1, up = true; for (let q = 0; q < 128; q += 8) { const x = resOf(ft, q); up &&= x >= prev; prev = x; } return up; }),
+    "SY1: resonance maps by family: the SVF types from ~68, the ladder from 0, each rising with Synth1's");
+  /* key track: the slope in LEAD's units (127 = 100 %, x 1.14 measured) and the pivot (Synth1's note 48, LEAD's 60: the cutoff at note 60 is frac octaves up) */
+  const k0 = cutOf(64, 0, 0), k127 = cutOf(64, 0, 127);
+  ok(Math.abs((k127 - k0) - 14.0 * T.kbd_track[127]) < 1.2 && get(lead({ [S.F_KBD]: 127 }), "KEY") === 127 && get(lead({ [S.F_KBD]: 0 }), "KEY") === 0,
+    "SY1: filter key track: KEY 127 at 100 %, and the base cutoff a fraction of an octave up (Synth1 pivots on note 48, LEAD on 60)");
+  /* saturation: LEAD's is a blend, Synth1's a rational curve: a measured table, rising, 127 from Synth1's ~80 */
+  const satOf = (x) => get(lead({ [S.F_SAT]: x }), "SAT");
+  ok(satOf(0) === 0 && satOf(40) > satOf(24) && satOf(64) > satOf(40) && satOf(100) === 127 && lead({ [S.F_SAT]: 110 }).skipped.some((x) => x.name === "Saturation"),
+    "SY1: saturation by the measured table (0 -> 0, rising, 127 from ~80), the part LEAD can't reach is listed");
+  /* the mod envelope: amount - 64, off when it is off */
+  ok(get(lead({ [S.MOD_ON]: 1, [S.MOD_AMT]: 100 }), "MAMT") === 36 && get(lead({ [S.MOD_ON]: 0, [S.MOD_AMT]: 100 }), "MAMT") === 0, "SY1: the mod envelope amount is value - 64, 0 when it is off");
+  /* voice modes */
+  ok(get(lead({ [S.PLAY]: 1 }), "VOICE") === 1 && get(lead({ [S.PLAY]: 2 }), "VOICE") === 2 && get(lead({ [S.UNI_ON]: 1 }), "VOICE") === 3 && get(lead({ [S.PORTA]: 0 }), "GLIDE") === 0 && get(lead({ [S.PORTA]: 64 }), "GLIDE") > 0,
+    "SY1: play mode and unison give the voice mode, a portamento time a glide");
+  /* unison: Synth1's N voices span +-D cents; LEAD's 8 span +-(0.198 x DETUNE): DETUNE = D x 5.05, the spread (pan - 64) / 64 */
+  r = lead({ [S.UNI_ON]: 1, [S.UNI_DET]: 80, [S.UNI_PAN]: 64 });
+  const Du = T.unison_cents[80];
+  ok(get(r, "DETUNE") === Math.round(Du * 5.05) && get(r, "SPRD") === 0 && get(lead({ [S.UNI_ON]: 1, [S.UNI_PAN]: 127 }), "SPRD") === Math.round(63 * 127 / 64) && r.skipped.some((x) => x.name === "Unison voices"),
+    "SY1: unison: DETUNE puts LEAD's 8 voices over Synth1's +-D cents (0.198 cents a step), SPREAD from its pan, the voice count listed");
+  /* the LFO: LFO 1 first, 4 destinations; FM and pan are listed as left out */
+  r = lead({ [S.L1_ON]: 1, [S.L1_DEPTH]: 80, [S.L1_DEST]: 5, [S.L1_TYPE]: 5, [S.L1_SPEED]: 70 });
+  ok(get(r, "LDSHP") > 0 && get(r, "LDPIT") === 0 && get(r, "LWAVE") === 0 && get(r, "LRATE") > 0, "SY1: an LFO on the pulse width: SHP depth set, sine wave, a rate");
+  r = lead({ [S.L1_ON]: 1, [S.L1_DEPTH]: 80, [S.L1_DEST]: 6 });
+  ok(r.skipped.some((x) => /FM/.test(x.why)) && get(r, "LDFLT") === 0, "SY1: an LFO on FM has no LEAD destination: left out");
+  r = lead({ [S.L1_ON]: 0, [S.L2_ON]: 1, [S.L2_DEPTH]: 64, [S.L2_DEST]: 3 });
+  ok(get(r, "LDFLT") > 0 && get(r, "LPOL") === 1, "SY1: LFO 2 is used when LFO 1 is off (a filter LFO is unipolar)");
+  r = lead({ [S.L1_ON]: 1, [S.L1_DEPTH]: 80, [S.L1_DEST]: 4, [S.L1_TYPE]: 5 });
+  ok(get(r, "LDAMP") === 80 && get(r, "LPHASE") === 64 && get(lead({ [S.L1_ON]: 1, [S.L1_DEPTH]: 80, [S.L1_DEST]: 3 }), "LPHASE") === 0,
+    "SY1: an amp LFO is a half cycle on (the host's dips at the peak, Synth1's at the trough), the others start at 0");
+  /* what has no equivalent is listed */
+  r = lead({ [S.ARP_ON]: 1, [S.OSC1_DET]: 40, [S.KEY_SHIFT]: 5, [S.SUB_GAIN]: 60, [S.SUB_OCT]: 0 });
+  ok(["Arpeggiator", "OSC 1 detune", "Key shift / fine tune", "Sub octave"].every((n) => r.skipped.some((x) => x.name === n)), "SY1: arpeggiator, OSC 1 detune, key shift and a same-pitch sub are listed as left out");
+  /* ranges: whatever the patch, every value is inside LEAD's */
+  const RNG = { E0: [0, 3], E1: [0, 3], E2: [-24, 24], E3: [-50, 50], KTRK: [0, 1], E5: [0, 3], FTYP: [0, 4], MDST: [0, 2], EDSHP: [-64, 63], MAMT: [-64, 63], FAMT: [-64, 63],
+    VOICE: [0, 3], LWAVE: [0, 4], LSYNC: [0, 10], LPOL: [0, 1], LTRIG: [0, 1], LDPIT: [0, 63], LDFLT: [0, 63], LDSHP: [0, 63], GLMODE: [0, 1], SUBW: [0, 3] };
+  let inr = true, seed = 99;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) >> 8;
+  for (let n = 0; n < 400; n++) {
+    const m = {};
+    for (let i = 0; i < 99; i++) m[i] = (rnd() % 300) - 90;
+    for (const { key, value } of lead(m, [112, 105, 0][n % 3]).set) {
+      const [lo, hi] = RNG[key] || [0, 127];
+      inr &&= Number.isInteger(value) && value >= lo && value <= hi;
+    }
+  }
+  ok(inr, "SY1: whatever the patch (400 random ones, old versions too), every LEAD value is an integer inside its range");
+  /* the device: engine values at pe0 + i, ids from a newer firmware left out */
+  r = lead({});
+  const dv = N.toDevice(r, 106, 200);
+  ok(dv.filter(([id]) => id >= 106 && id < 114).length === 8 && dv.some(([id]) => id === 76) && dv.some(([id]) => id === 80) && N.toDevice(r, 106, 78).every(([id]) => id < 78),
+    "SY1: an import is (id, value) pairs: 8 engine values at pe0 + i, the filter envelope at 76..80, ids past the firmware's count left out");
+  /* the layout shows the filter envelope pages of LEAD */
+  ok(/\["FLT MIX", 0, \[68, 76\]\], \["FLT ENV", 0, \[77, 78, 79, 80\]\]/.test(html), "SY1: the editor's LEAD layout has FLT MIX (SAT, FAMT) and FLT ENV (the ADSR, ids 77..80), as eng_lead.c");
 }
 
 /* the 6-operator patch formats (FM6 in editor.html == eng_fm6.c / fm6_test.c), the SysEx files, the protocol

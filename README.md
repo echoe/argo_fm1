@@ -212,7 +212,10 @@ LEAD controls/features in depth:
   - FM amount (OSC 2 to OSC 1 phase modulation), SUB (the sub oscillator, an octave below OSC 1) and SUBW (its shape: Sine, Tri, Saw, Square), Keytrack (OSC 2 key tracking).
   - Filter: Types - Lowpass 12 and 24DB, Highpass 12DB, Bandpass 12DB, Lowpass Diode), Cutoff, Resonance, Key tracking.
   - Mod Envelope: Amount (-64..+63; 0 is off), Mod attack, Mod decay, Mod Destination (the envelope moves Oscillator 2's pitch by up to 60 semitones, the FM depth or the pulse width).
-  - Pulse width is set with the track's Shape as adjusted in the ENV section's second page.
+  - Pulse width is Synth1's: the ENV section's second page, SHP, is the static width (+63 is square, 0 is Synth1's default 25%, -64 the narrowest). The LFO's SHP and the mod envelope's PW destination move it from there by a share of the room left on that side, as Synth1's. (This changed: before, SHP was an envelope amount around a square wave.)
+  - FLT MIX page: Saturation (SAT) and the filter envelope's Amount (FAMT, -64..+63; 0 is off, +-64 sweeps the whole range, as Synth1's). FLT ENV page: its own ADSR for the cutoff (Attack, Decay, Sustain, Release). It is added to the track's ENV -> FLT (the amp ADSR's), so set that to 0 to hear it alone.
+  - The mod envelope's FM destination follows the decay in dB and moves FM by a share of the room left, as Synth1's.
+  - Synth1 patches: in the web editor's LEAD tab, "Import .sy1" reads one or several Synth1 patches and "Send to LEAD" converts the selected one onto the track. Oscillators, filter, envelopes, mod envelope, LFO 1, unison and glide are converted; each field shows how sure the mapping is, and what has no LEAD equivalent (arpeggiator, EQ, effect, OSC 1 detune copies, key shift...) is listed. The mapping was measured against Synth1's engine (fm1-sy1's `s1render`): `tools/sy1_ab.py` renders 49 test patches through both and compares level over time and spectrum, `tools/sy1_calibrate.py` finds the best LEAD value for a Synth1 one (see the tools' headers; `tests/sy1_render.c` is the LEAD side).
 
 
 SH-TONE controls/features in depth:
@@ -259,7 +262,7 @@ Under the FX live mode, button 15 enables DJFX Looper mode. You can set it to lo
 ## Tips and tricks
 
 If you don't know why something is happening to your sound, there are a few places to check.
-- FX, especially Slicer - make sure it isn't on.
+- FX, especially Slicer - make sure they aren't on.
 - Arp - make sure the generative mode isn't on if it shouldn't be.
 - Check the pages under SEQ to make sure you're not swapping presets or have recorded something else inadvertently. Everything that's recorded will be under the fourth page.
 - Hold GLO to check that you haven't muted your track!
@@ -267,10 +270,10 @@ If you don't know why something is happening to your sound, there are a few plac
 - If your chord mode is not playing a chord, make sure your preset isn't a mono, legato, or unison preset! You can check on the 'VOICE' page when editing the synth: usually this will be the third-to-last page.
 - If you set automation and it is not saved, or it's taking up too many commands, you can use OCT+ on the AUTOMATION page under SEQ to swap between LOCK and AUTO. LOCK will only lock it at the specific step: AUTO will keep your change for the rest of the sequence.
 - Quantize is set on by default and deletes all of your nudges. If you want some interestingly-spaced sounds, turn it off!!! It's the second row on the AUTO page.
+- If you want to, e.g., lock an FX, set FX Latch mode to ON in the second page of the Menu. FX settings (including DJ mode) will remain on with that.
 
 ## Changelog
-Really should've had this before, oops.
-
+- 1.8.6 - Sequence banks store notes in list format. 128 steps/pattern but it has to be lossy - there's % in the top right that says how filled the patterns are. LEAD engine updates to make the engine more accurate and well laid out. More functional synth1 preset import to LEAD presets. DJFX knob direction bugfix. Argo MIDI advertisement.
 - 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 - 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient
 - 1.8.3 - fmhub support with the new json, so supporting automated builds and various tweaks around that.
@@ -285,7 +288,6 @@ Really should've had this before, oops.
 If you have any requests or suggestions, please feel free to let me know!
 
 ## Todo
-- ship minor fixes put into main branch after last point release
-- continuing to fix up LEAD synth
-- turning quantize off by default [ I think ... I will debate this but that's how I'm leaning ]
-- possibly adding a few more synths, depending. like a 4-op opx-style synth ... working on making the editing usable for that. but we'll see
+- possibly set QUANTIZE off by default? note: to do this, just set P_SQNT to 1 in params.c, then fix tests to expect that
+- continuing to see if opx4 synth can be added ... it has so many variables, it's difficult
+- rearchitect to base on new project branching off of felucca, which can then build everywhere instead of just the fm-1. this will probably be argo 2.0 if/when I get there. I would like to get all of the features buttoned down first.

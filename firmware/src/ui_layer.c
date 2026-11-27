@@ -391,7 +391,7 @@ static void seq_after(uint32_t t, int rc)
 {
     char n[2] = {(char)('1' + pb_cur[t % NTRK]), 0}, a[8] = {'T', (char)('1' + t % NTRK), ' ', 'S', 'E', 'Q', ' ', 0};
     if (rc < 0) {
-        ui_message(rc == -2 ? "AUTOMATION OVER 64" : rc == -3 ? "AUTOMATION FULL" : "SEQUENCE ERROR");
+        ui_message(rc == -2 ? "AUTOMATION OVER 64" : rc == -3 ? "AUTOMATION FULL" : rc == -4 ? "SEQUENCES FULL" : "SEQUENCE ERROR");
         return;
     }
     undo.trk = 0;

@@ -55,7 +55,7 @@ static void fl_plain_window_init(void) {}
 #define PB_BASE_END (OBJ_PB_BASE + OBJ_PB_N * 2u * ST_SECTOR)
 _Static_assert(PB_BASE_END <= 0xDC000u, "the sequence banks overrun the user preset banks");
 _Static_assert(PB_NOBJ * PB_NSTORE == OBJ_PB_N, "objects");
-_Static_assert(PB_HDR + PB_PER * PB_PAT_B <= ST_PAYLOAD_MAX, "an object does not fit a sector");
+_Static_assert(PB_HDR + PB_PER * PB_OLD_PAT_B <= ST_PAYLOAD_MAX, "an object does not fit a sector");
 _Static_assert(PB_META_FIX + 3u * 800u <= ST_PAYLOAD_MAX, "fewer than 800 automation records fit the last object");
 
 static int check(const char *what, int ok)

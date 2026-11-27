@@ -503,8 +503,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         str_cpy(val, N_ONOFF[v ? 1 : 0], 7);
         break;
     case F_STEPS:
-        fmt_int(val, v);
-        *unit = "STEP";
+        fmt_int(val, v);                              /* (1.9: no unit: "128 STEP" does not fit a card, the label says LEN) */
         break;
     default:
         if (d->names) {                               /* F_INT with a 0-terminated name list: the range */
@@ -580,9 +579,12 @@ static const page_t PAGES[] = {
     {"SK KIT", FAM_EDIT, SC_TRACK, GR_NONE, {SKP_DPT, SKP_SWP, SKP_CRS, SKP_FLD}},
 #endif
     /* LEAD's (eng_lead.c): the second oscillator and the sub, the filter, the mod envelope: operator slots under its own names (lead_xdesc) */
-    {"MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_E4, P_E5, P_FM2_SUS, 0xFF}, ENGI_LEAD + 1},                    /* MIX XMOD SAT (EDIT 2 is hidden for LEAD: ui.c page_visible) */
+    {"MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_E4, P_E5, 0xFF, 0xFF}, ENGI_LEAD + 1},                         /* MIX XMOD (EDIT 2 is hidden for LEAD: ui.c page_visible) */
     {"OSC 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}, ENGI_LEAD + 1},
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM2_ATK, P_E6, P_E7, P_FM2_DEC}, ENGI_LEAD + 1},             /* FTYP CUT RES KEY, as ANALOG's: TYPE CUT RES KTR */
+    /* the filter's other controls, next to FILTER: SAT FAMT (the filter envelope's amount; 0 = off), then its ADSR (eng_lead.c lead_fenv) */
+    {"FLT MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM2_SUS, P_FM4_ATK, 0xFF, 0xFF}, ENGI_LEAD + 1},
+    {"FLT ENV", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM4_DEC, P_FM4_SUS, P_FM4_REL, P_FM4_LEVEL}, ENGI_LEAD + 1},   /* FATK FDEC FSUS FREL */
     {"MOD ENV", FAM_EDIT, SC_TRACK, GR_NONE, {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}, ENGI_LEAD + 1},
 #if FELUCCA_SWARM
     /* SWARM's (eng_swarm.c, ported from Mini-Tone): the resonant voice filter: TYPE, CUT (EDIT 2's), RES and KEY (FM operator slots) */

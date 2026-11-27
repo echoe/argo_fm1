@@ -10,7 +10,12 @@
  * 7. KTRK OFF fixes OSC 2 (a synced OSC 2 shifts with the key only when it tracks).
  * 8. no DC and no clipping: every preset (4 notes), then corners of WAV1 x WAV2 x XMOD x FTYP x extremes, 8 notes.
  * 9. determinism: a note from silence renders the same samples again.
- * 10. descriptors and presets: every slot's descriptor, the 32 factory presets' slots inside their ranges, category string. */
+ * 10. descriptors and presets: every slot's descriptor, the 32 factory presets' slots inside their ranges, category string.
+ * 13. PW and FM move as Synth1's: lead_pw_move by a share of the room left on that side (+-1 = all of it, kept in 1.25 / 254 ..
+ *     1 - 1.375 / 254); the mod envelope on PW narrows a square and it returns; lead_log2q8 (the FM decay in dB) is within 0.03 octave.
+ * 11. FILTER ENVELOPE (FAMT FATK FDEC FSUS FREL): FAMT 0 is off whatever the other four hold (the same samples); +FAMT opens a
+ *     closed filter at the start and it falls back, FSUS holds it open; -FAMT closes an open one; attack, decay and release
+ *     take the times of the host's time law (lead_fenv on its own: ENV_LIN / ENV_EXP). */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -28,6 +33,15 @@ static uint32_t eng_lead(void)
     for (e = 0; e < NENGINES; e++)
         if (ENGINES[e] == &ENG_LEAD)
             return e;
+    return 0;
+}
+
+static int sh_set(const int16_t (*x)[2])
+{
+    uint32_t i;
+    for (i = 0; x[i][0]; i++)
+        if (x[i][0] == P_ED_SHP)
+            return 1;
     return 0;
 }
 
@@ -53,6 +67,8 @@ static void setup(const int16_t *e, const int16_t (*x)[2])
     trk[0].p[P_SUS] = 127;
     trk[0].p[P_REL] = 10;
     trk[0].p[P_ED_FLT] = 0;
+    if (!(x && sh_set(x)))
+        trk[0].p[P_ED_SHP] = 63;                      /* ENV SHP is LEAD's static pulse width: 63 = square */
     trk[0].p[P_VOICE] = V_POLY;
     trk[0].p[P_CHOR] = trk[0].p[P_DLY] = trk[0].p[P_REV] = 0;
 }
@@ -270,6 +286,140 @@ int main(void)
         check("KTRK: OFF and ON render differently for a synced OSC 2 (tracking changes the spectrum)", fabs(a - b) > 1e-4 || memcmp(y, y2, sizeof y) != 0);
     }
 
+    /* 11. the filter envelope */
+    {
+        int16_t p[8] = {1, 1, 0, 0, 0, 0, 30, 0}, q[8] = {1, 1, 0, 0, 0, 0, 110, 0};
+        int16_t off[][2] = {{LDP_FAMT, 0}, {LDP_FATK, 90}, {LDP_FDEC, 20}, {LDP_FSUS, 127}, {LDP_FREL, 100}, {0, 0}};
+        int16_t up[][2] = {{LDP_FAMT, 60}, {LDP_FATK, 0}, {LDP_FDEC, 70}, {LDP_FSUS, 0}, {LDP_FREL, 0}, {0, 0}};
+        int16_t hold[][2] = {{LDP_FAMT, 60}, {LDP_FATK, 0}, {LDP_FDEC, 70}, {LDP_FSUS, 127}, {LDP_FREL, 0}, {0, 0}};
+        int16_t dn[][2] = {{LDP_FAMT, -60}, {LDP_FATK, 0}, {LDP_FDEC, 70}, {LDP_FSUS, 0}, {LDP_FREL, 0}, {0, 0}};
+        static int32_t a[4096], b[4096], c[4096];
+        double h_off, h_up0, h_up1, h_hold, h_dn0, h_dn1, h_q;
+        render_x(p, off, 45, a, 4096, 1, 0);
+        render_x(p, 0, 45, b, 4096, 1, 0);
+        check("FLT ENV: FAMT 0 is off whatever FATK FDEC FSUS FREL hold (the same samples)", !memcmp(a, b, sizeof a));
+
+        render_x(p, up, 45, a, 4096, 1, 0);                    /* the start */
+        render_x(p, up, 45, b, 4096, 1, 4000);                 /* four seconds on: FSUS 0, the envelope has fallen */
+        render_x(p, 0, 45, c, 4096, 1, 4000);                  /* no envelope */
+        h_up0 = band(a, 4096, 2000, 8000);
+        h_up1 = band(b, 4096, 2000, 8000);
+        h_off = band(c, 4096, 2000, 8000);
+        check("FLT ENV: +FAMT, FSUS 0: the note starts brighter (2..8 kHz) than it ends (> 3 x) ...", h_up0 > 3.0 * h_up1);
+        check("FLT ENV: ... and the end is the filter alone (the high band within 5 % of FAMT 0's)", fabs(h_up1 - h_off) < 0.05 * h_off + 1.0);
+
+        render_x(p, hold, 45, a, 4096, 1, 4000);
+        h_hold = band(a, 4096, 2000, 8000);
+        check("FLT ENV: FSUS 127 holds the filter open (4 s on, more than 5 x the high band of FAMT 0)", h_hold > 5.0 * (h_off + 1.0));
+
+        render_x(q, dn, 45, a, 4096, 1, 0);
+        render_x(q, dn, 45, b, 4096, 1, 4000);
+        render_x(q, 0, 45, c, 4096, 1, 4000);
+        h_dn0 = band(a, 4096, 2000, 8000);
+        h_dn1 = band(b, 4096, 2000, 8000);
+        h_q = band(c, 4096, 2000, 8000);
+        check("FLT ENV: -FAMT closes an open filter at the start (less high band than 4 s on) ...", h_dn0 < 0.3 * h_dn1);
+        check("FLT ENV: ... and it opens back to the filter alone (within 5 % of FAMT 0's)", fabs(h_dn1 - h_q) < 0.05 * h_q + 1.0);
+
+        /* the stages on their own: attack, decay and release in the host's times */
+        {
+            static int16_t pp[P_COUNT];
+            voice_t v;
+            uint32_t blk, att = 0, rel = 0;
+            int32_t l;
+            memset(&v, 0, sizeof v);
+            memset(pp, 0, sizeof pp);
+            v.gate = 1;
+            pp[LDP_FATK] = 60;
+            pp[LDP_FDEC] = 40;
+            pp[LDP_FSUS] = 127;
+            pp[LDP_FREL] = 60;
+            for (blk = 0; blk < 20000u && ((v.s[7] >> 24) & 3) == 0; blk++)
+                lead_fenv(pp, &v, CTL);
+            att = blk;
+            {
+                double want = TIME_MS_X10[60] / 10.0 * FS / 1000.0 / CTL;
+                check("FLT ENV: the attack takes the host's time for FATK 60 (within 6 %)", fabs(att - want) < 0.06 * want);
+            }
+            for (blk = 0; blk < 4000u; blk++)
+                l = lead_fenv(pp, &v, CTL);
+            check("FLT ENV: FSUS 127 sustains at full level", l > 65000);
+            v.gate = 0;
+            for (blk = 0; blk < 40000u; blk++) {
+                l = lead_fenv(pp, &v, CTL);
+                if (l < 655) {                          /* under 1 % */
+                    rel = blk + 1u;
+                    break;
+                }
+            }
+            {
+                double want = TIME_MS_X10[60] / 10.0 * FS / 1000.0 / CTL;
+                check("FLT ENV: the release falls under 1 % in the host's time for FREL 60 (within 12 %)", rel && fabs(rel - want) < 0.12 * want);
+            }
+        }
+    }
+
+    /* 12. the pulse width is Synth1's: ENV SHP = (PULSE WIDTH 0 .. 127) - 64, 63 = square */
+    {
+        int16_t p[8] = {2, 1, 0, 0, 0, 0, 127, 0};               /* PLS only, the filter wide open */
+        int16_t sq[][2] = {{P_ED_SHP, 63}, {0, 0}}, nr[][2] = {{P_ED_SHP, -32}, {0, 0}}, d4[][2] = {{P_ED_SHP, 0}, {0, 0}};
+        static int32_t a[8192];
+        double h1, h2, h4;
+        render_x(p, sq, 33, a, 8192, 1, 0);                      /* 55 Hz */
+        h1 = band(a, 8192, 50, 60);
+        h2 = band(a, 8192, 105, 115);
+        check("pulse width: SHP 63 is a square (no 2nd harmonic: < 5 % of the 1st)", h2 < 0.05 * h1);
+        render_x(p, nr, 33, a, 8192, 1, 0);                      /* PULSE WIDTH 32: 32 / 254 = 12.6 %: the 2nd is ~0.7 of the 1st */
+        h1 = band(a, 8192, 50, 60);
+        h2 = band(a, 8192, 105, 115);
+        check("pulse width: SHP -32 (Synth1's 32, 12.6 %) has a strong 2nd harmonic (> 0.4 of the 1st)", h2 > 0.4 * h1);
+        render_x(p, d4, 33, a, 8192, 1, 0);                      /* PULSE WIDTH 64: 25 %: the 4th harmonic is absent, the 2nd strong */
+        h1 = band(a, 8192, 50, 60);
+        h2 = band(a, 8192, 105, 115);
+        h4 = band(a, 8192, 215, 225);
+        check("pulse width: SHP 0 (Synth1's default 64, 25 %) has no 4th harmonic (< 1 % of the 1st's power) and a strong 2nd (> 0.15)", h4 < 0.01 * h1 && h2 > 0.15 * h1);
+    }
+
+    /* 13. PW and FM move as Synth1's */
+    {
+        double sq = 2147483648.0, q;
+        uint32_t w;
+        w = lead_pw_move(0x80000000u, -16384);            /* a square, half the room below: a quarter of the cycle */
+        q = w / 4294967296.0;
+        check("PW move: from a square, -0.5 of the room below is a quarter cycle", fabs(q - 0.25) < 0.002);
+        w = lead_pw_move(0x40000000u, 16384);             /* 0.25 + half of the 0.75 above */
+        q = w / 4294967296.0;
+        check("PW move: from 0.25, +0.5 of the room above is 0.625 (past a square: the same sound, reversed)", fabs(q - 0.625) < 0.002);
+        w = lead_pw_move(0x40000000u, -32767);
+        q = w / 4294967296.0;
+        check("PW move: all the room below stops at 1.25 / 254 of the cycle", fabs(q - 1.25 / 254.0) < 0.0005);
+        w = lead_pw_move(0x40000000u, 32767);
+        q = w / 4294967296.0;
+        check("PW move: all the room above stops at 1 - 1.375 / 254 of the cycle", fabs(q - (1.0 - 1.375 / 254.0)) < 0.0005);
+        (void)sq;
+        {
+            int ok = 1;
+            uint32_t x;
+            for (x = 3000u; x < 65536u; x += 977u) {
+                double want = log2((double)x / 65536.0) * 256.0;
+                ok &= fabs((double)lead_log2q8(x) - want) < 8.0;      /* 0.03 octave */
+            }
+            check("FM decay: lead_log2q8 within 0.03 octave of log2(x / 65536) from 0.05 to 1", ok);
+        }
+    }
+    {   /* the mod envelope on PW: a square narrowed at the start (the 2nd harmonic appears), back to a square when it has decayed */
+        int16_t p[8] = {2, 1, 0, 0, 0, 0, 127, 0};
+        int16_t m[][2] = {{P_ED_SHP, 63}, {LDP_MDST, 2}, {LDP_MAMT, -64}, {LDP_MATK, 0}, {LDP_MDEC, 70}, {0, 0}};
+        static int32_t a[8192], b[8192];
+        double h1, h2, g1, g2;
+        render_x(p, m, 33, a, 8192, 1, 0);
+        render_x(p, m, 33, b, 8192, 1, 4000);
+        h1 = band(a, 8192, 50, 60);  h2 = band(a, 8192, 105, 115);
+        g1 = band(b, 8192, 50, 60);  g2 = band(b, 8192, 105, 115);
+        check("PW mod env: -64 narrows a square at the start (2nd harmonic > 0.1 of the 1st) ...", h2 > 0.1 * h1);
+        check("PW mod env: ... and 4 s on it is a square again (2nd harmonic < 0.01 of the 1st)", g2 < 0.01 * g1);
+    }
+
     /* 8. no DC, no clipping: presets, then corners */
     ok = 1;
     for (pi = 0; pi < ENG_LEAD.npresets; pi++) {
@@ -308,7 +458,8 @@ int main(void)
                             for (s = 0; s < 2; s++) {
                                 int16_t p[8] = {(int16_t)w1, (int16_t)w2, 12, 7, 64, (int16_t)xm, (int16_t)cu[c], (int16_t)rs[r]};
                                 int16_t x[][2] = {{LDP_FTYPE, (int16_t)ft}, {LDP_SUB, (int16_t)sb[s]}, {LDP_FM, (int16_t)(s ? 127 : 0)},
-                                                  {LDP_SAT, (int16_t)(s ? 127 : 0)}, {LDP_MAMT, (int16_t)(s ? 63 : -64)}, {LDP_MDST, (int16_t)(ft % 3)}, {0, 0}};
+                                                  {LDP_SAT, (int16_t)(s ? 127 : 0)}, {LDP_MAMT, (int16_t)(s ? 63 : -64)}, {LDP_MDST, (int16_t)(ft % 3)},
+                                                  {LDP_FAMT, (int16_t)(s ? 63 : -64)}, {LDP_FDEC, 40}, {LDP_FSUS, (int16_t)(r ? 127 : 0)}, {0, 0}};
                                 int32_t pk = 0;
                                 render(p, x, 36 + w1 * 7 + w2 * 5, y, 4096, 8);
                                 for (i = 0; i < 4096; i++)
@@ -319,7 +470,7 @@ int main(void)
                                 }
                             }
                 }
-    check("corners (WAV1 x WAV2 x XMOD x FTYP, CUT / RES / SUB / FM / SAT / MAMT at the ends), 8 notes: bounded", ok);
+    check("corners (WAV1 x WAV2 x XMOD x FTYP, CUT / RES / SUB / FM / SAT / MAMT / FAMT at the ends), 8 notes: bounded", ok);
 
     /* 9. determinism */
     {
@@ -332,11 +483,12 @@ int main(void)
 
     /* 10. descriptors and presets */
     ok = ENG_LEAD.edit[2].min < 0 && ENG_LEAD.edit[3].min < 0 && ENG_LEAD.edit[5].max == 3 && ENG_LEAD.edit[0].max == 3;
-    for (i = P_FM1_ATK; i <= P_FM3_REL; i++)
-        if (i != P_FM1_LEVEL && i != P_FM2_LEVEL && i != P_FM2_REL)
+    for (i = P_FM1_ATK; i <= P_FM4_LEVEL; i++)
+        if (i != P_FM1_LEVEL && i != P_FM2_LEVEL && i != P_FM2_REL && i != P_FM3_LEVEL)
             ok &= lead_xdesc(i) != 0 && lead_xdesc(i)->label[0];
     ok &= lead_xdesc(LDP_MAMT)->min == -64 && lead_xdesc(LDP_FTYPE)->max == 4;
-    check("descriptors: PTCH / DETN / MAMT signed, WAV1 4 values, XMOD 4, FTYP 5, every slot named", ok);
+    ok &= lead_xdesc(LDP_FAMT)->min == -64 && lead_xdesc(LDP_FAMT)->max == 63 && lead_xdesc(LDP_FAMT)->def == 0 && lead_xdesc(LDP_FREL)->fmt == F_TIME;
+    check("descriptors: PTCH / DETN / MAMT / FAMT signed, WAV1 4 values, XMOD 4, FTYP 5, every slot named", ok);
     ok = ENG_LEAD.npresets == 32;
     for (pi = 0; pi < ENG_LEAD.npresets; pi++) {
         static const uint8_t ID[LD_NX] = {LDP_FM, LDP_SUB, LDP_SUBW, LDP_KTRK, LDP_FTYPE, LDP_KEY, LDP_SAT, LDP_MAMT, LDP_MATK, LDP_MDEC, LDP_MDST};

@@ -10,6 +10,7 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
   Pack (the drum samples, CC0 1.0); the [Fukiai](https://github.com/hugelton/Fukiai) icon
   font ([MIT](LICENSES/MIT-Fukiai.txt)); the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (Argo builds all but NOISE)
   ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines), [MIT](LICENSES/MIT-Felucca-Engines.txt))
+- Synth1 patch import (`.sy1`, the web editor's LEAD tab): the measured tables are from [fm1-sy1](https://github.com/fenderberg/fm1-sy1) by fenderberg ([MIT](LICENSES/MIT-fm1-sy1.txt)), themselves [oxo_synth2](https://github.com/chab/oxo_synth2)'s measurements of Synth1 (MIT; `tools/gen_sy1_tables.py`)
 - Font: [Inter Tight](https://github.com/rsms/inter-tight) by The Inter Project Authors, [SIL OFL 1.1](LICENSES/OFL-InterTight.txt)
 - Samples: [Versilian Studios](https://versilian-studios.com/) [VSCO-2 Community Edition](https://github.com/sgossner/VSCO-2-CE) and [VCSL](https://github.com/sgossner/VCSL), CC0 1.0: the SAMPLE sets, also SLICE's PIANO and PIANO HD ([attribution](assets/samples-cc0/ATTRIBUTION.txt))
 - VOICE engine: after [klattsch](https://github.com/tgies/klattsch) by Tony Gies (MIT); formant data from Klatt (1980) and Hillenbrand et al. (1995)

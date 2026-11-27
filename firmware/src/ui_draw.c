@@ -11,7 +11,7 @@
  * free text (names) is ellipsised at its size. */
 static void draw_menu(void);
 static int name_on(void);                              /* NAME (ui_name.c) */
-static uint64_t lock_held(void);                       /* parameter locks: the steps held on STEP (ui_input.c) */
+static sset_t lock_held(void);                       /* parameter locks: the steps held on STEP (ui_input.c) */
 static void name_draw(void);
 #include "ui_help.c"                                   /* 1.5: HELP's hints (draw_foot, ui_layer.c draw_layer) */
 
@@ -167,7 +167,8 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
 #define HEAD_REC_X 20                                  /* the REC mark's cell (ink 23..33), after the slot letter if any */
 #define HEAD_SLOT_X 23                                 /* the slot letter's pen (ui_draw.c head_slot) */
 #define HEAD_BAT_X 214                                 /* the battery's cell */
-#define HEAD_GRP_R 208                                 /* the octave / song row ends here */
+#define HEAD_GRP_R 208                                 /* the octave / song row ends here (1.9: left of the sequence memory, when that shows) */
+static int32_t head_gr = HEAD_GRP_R;
 #define HEAD_MSG_W 166                                 /* a message centred on x 120: 37..203 (after the REC mark) */
 #define HEAD_GAP 4                                     /* ink to ink: the metronome -> the BPM -> the lock */
 #define HEAD_PLAY_GAP 6                                /* the play state -> the metronome */
@@ -310,12 +311,12 @@ static void head_group(void)
     int32_t x;
     if (chain.running) {
         fmt_int(b, (int32_t)chain.row + 1);
-        x = HEAD_GRP_R - (16 + 4 + text_w(&AF_M, b));
+        x = head_gr - (16 + 4 + text_w(&AF_M, b));
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_SONG, T_MID, T_BG);   /* SONG: the disc */
     } else {
         str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
         fmt_int(b + str_len(b), song.octave);
-        x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
+        x = head_gr - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         x = cv_text(x, HEAD_SY, &AF_S, "OCT", T_MID);
     }
@@ -340,6 +341,11 @@ static void draw_head(void)
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
+    uint32_t use = 0;                                  /* 1.9: how full the sequences are, % (patbank_store.c pb_use_pct): left of the battery */
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+    use = pb_use_pct();
+    sig += use * 15731u;
+#endif
     if (song.g[G_BPM] != ui.roll_bpm) {
         char a[8];
         fmt_int(a, ui.roll_bpm);
@@ -406,6 +412,17 @@ static void draw_head(void)
         }
     } else {
         head_msg(-1, HEAD_MSG_W);
+    }
+    head_gr = HEAD_GRP_R;
+    if (use && !(msg && centre)) {                     /* "37%": the fuller of the sequence memory and a track's flash object (95 on: the warning's colour) */
+        char u[6];
+        int32_t w;
+        fmt_int(u, (int32_t)use);
+        str_cpy(u + str_len(u), "%", 2);
+        w = text_w(&AF_S, u);
+        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
+        (void)cv_text(HEAD_GRP_R + 2 - w, HEAD_SY, &AF_S, u, use >= 95u ? T_WARN : T_MID);
+        head_gr = HEAD_GRP_R - w - 5;
     }
     if (!msg && (chain.running || song.octave))
         head_group();
@@ -1369,10 +1386,10 @@ static void draw_columns(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_ROLL && lock_held()) {   /* a step held: what KNOB 1..4 lock (ui_input.c lock_turn) */
-        uint64_t held = lock_held();
+    if (cur_page()->graph == GR_ROLL && ss_any(lock_held())) {   /* a step held: what KNOB 1..4 lock (ui_input.c lock_turn) */
+        sset_t held = lock_held();
         uint32_t st = 0;
-        while (!((held >> st) & 1u))
+        while (st < NSTEP - 1u && !ss_has(held, st))
             st++;                                       /* (the first step held: its values) */
         for (c = 0; c < 4u; c++) {
             uint32_t id = lock_id(c);

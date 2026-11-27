@@ -195,7 +195,7 @@ static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_
 static void graph_roll(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, ncol, mask = scale_mask(t), held = pr_held();
-    uint64_t locks = motion_lock_steps(trk_index(t));
+    sset_t locks = motion_lock_steps(trk_index(t));
     int32_t r, ybot = PR_Y0 + PR_ROWS * PR_RH, gw;
     char nb[8];
     ncol = base < len ? (len - base < 16u ? len - base : 16u) : 0u;
@@ -231,7 +231,7 @@ static void graph_roll(const track_t *t, uint16_t c)
             cv_frame(x, PR_Y0 - 2, PR_CW + 1, ybot - PR_Y0 + 4, T_TEXT);
         if (song.playing && si == t->seq_idx)
             cv_rect(x + 6, PR_Y0, 1, ybot - PR_Y0, T_ACCENT);
-        if ((locks >> si) & 1u)                       /* a parameter lock: a mark under the step */
+        if (ss_has(locks, si))                       /* a parameter lock: a mark under the step */
             cv_rect(x + 3, ybot + 3, 7, 2, T_ACCENT);
         if (step_detailed(&seq_steps(t)[si]))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
             cv_rect(x + 4, 2, 5, 3, c);
@@ -264,10 +264,10 @@ static void graph_roll(const track_t *t, uint16_t c)
 static void graph_grid(const track_t *t, uint16_t c)
 {
     uint32_t l, i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, mute = drum_mute[trk_index(t) % NPART];
-    uint64_t locks = motion_lock_steps(trk_index(t));
+    sset_t locks = motion_lock_steps(trk_index(t));
     int32_t y0 = 6;
     for (i = 0; i < 16u && base + i < len; i++) {   /* a parameter lock: a mark over the step; CHANCE / RATCH / */
-        if ((locks >> (base + i)) & 1u)               /* NUDGE set (1.5.1, DETAIL): a dot under it */
+        if (ss_has(locks, base + i))               /* NUDGE set (1.5.1, DETAIL): a dot under it */
             cv_rect(41 + (int32_t)i * 12, 1, 8, 2, T_ACCENT);
         if (step_detailed(&seq_steps(t)[base + i]))
             cv_rect(43 + (int32_t)i * 12, 3, 4, 2, c);
@@ -1443,8 +1443,8 @@ static uint32_t graph_signature(void)
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u + ui.lane * 104723u + ui.bank * 613u +
              drum_mute[trk_index(t) % NPART] * 2654435761u;
         {                                            /* the parameter locks' marks (the roll, the grid) */
-            uint64_t lk = motion_lock_steps(trk_index(t));
-            h = (h ^ (uint32_t)lk ^ (uint32_t)(lk >> 32) * 2654435761u) * 16777619u;
+            sset_t lk = motion_lock_steps(trk_index(t));
+            h = (h ^ ss_hash(lk)) * 16777619u;
         }
         if (detail_on())                             /* DETAIL: QUANTIZE (NUDGE's DIM), the lane named in the accent (DETAIL 2: its own) */
             h = (h ^ (0xD1u + (detail2_on() ? 0x5Cu : 0u) + (uint32_t)t->p[P_SQNT] * 31u + (ui.hot_t ? ui.hot_col + 1u : 0u) * 977u)) * 2654435761u;
@@ -1480,6 +1480,15 @@ static const char *eng_abbr(const char *name)
 #define LIST_Y(k) (3 + 17 * (int32_t)(k))
 #define LIST_TY CAP_IN(M, 16)                           /* a row's text: its capitals rows 2 .. 12 of the row */
 #define LIST_NX 64
+/* a step's number in a list row: two digits (01..99), three from 100 (sequences of 128 steps, 1.9) */
+static void ev_step_num(char *b, uint32_t n)
+{
+    if (n >= 100u) {
+        b[0] = (char)('0' + n / 100u % 10u); b[1] = (char)('0' + n / 10u % 10u); b[2] = (char)('0' + n % 10u); b[3] = 0;
+    } else {
+        b[0] = (char)('0' + n / 10u); b[1] = (char)('0' + n % 10u); b[2] = 0;
+    }
+}
 static void list_row(int32_t y, int sel, const char *tag, uint16_t tc, const char *name, uint16_t nc, int32_t x1)
 {
     uint16_t bg = sel ? T_THEME : T_SURF;
@@ -1708,9 +1717,7 @@ static void graph_events(void)
             uint16_t vc = (kd == EVK_NUDGE && !ev_nudge_plays(t, &t->step[s])) ||   /* (QUANTIZE ON ..) */
                           (kd == EVK_VEL && !ev_vel_plays(&t->step[s])) ? T_DIM : T_TEXT;
             char b[8];
-            b[0] = (char)('0' + (s + 1u) / 10u);
-            b[1] = (char)('0' + (s + 1u) % 10u);
-            b[2] = 0;
+            ev_step_num(b, s + 1u);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(14, y + LIST_TY, &AF_M, "STEP", sel ? T_INK : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
@@ -1739,9 +1746,7 @@ static void graph_events(void)
             char b[16], nm[12];
             const char *unit;
             int32_t x;
-            b[0] = (char)('0' + ((e->place & 63u) + 1u) / 10u);
-            b[1] = (char)('0' + ((e->place & 63u) + 1u) % 10u);
-            b[2] = 0;
+            ev_step_num(b, MO_STEP(e->place) + 1u);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(14, y + LIST_TY, &AF_M, lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");

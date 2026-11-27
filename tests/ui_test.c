@@ -594,7 +594,7 @@ static int test_sound_loads(void)
         memcpy(legacy.t[ti].p, decoded.t[ti].p, 61u * sizeof(int16_t));
         memcpy(legacy.t[ti].p + 61, decoded.t[ti].p + P_E0, 8u * sizeof(int16_t));
         legacy.t[ti].engine = decoded.t[ti].engine; legacy.t[ti].preset = decoded.t[ti].preset;
-        for (uint32_t st = 0; st < NSTEP; st++) memcpy(&legacy.t[ti].step[st], &decoded.t[ti].step[st], sizeof(step10_t));
+        for (uint32_t st = 0; st < NSTEP_REC; st++) memcpy(&legacy.t[ti].step[st], &decoded.t[ti].step[st], sizeof(step10_t));
     }
     legacy.t[3].engine = 0;
     legacy.g[G_DRLVL] = 71; legacy.g[G_DRREV] = 43;
@@ -9655,10 +9655,10 @@ static int test_seq_end_knob(void)
     return bad;
 }
 
-/* LEAD's pages: EDIT 1, MIX (MIX XMOD SAT), OSC 2, FILTER (FTYP CUT RES KEY), MOD ENV; no EDIT 2 (its E4..E7 are on MIX and FILTER) */
+/* LEAD's pages: EDIT 1, MIX (MIX XMOD), OSC 2, FILTER (FTYP CUT RES KEY), FLT MIX (SAT FAMT), FLT ENV (FATK FDEC FSUS FREL), MOD ENV; no EDIT 2 (its E4..E7 are on MIX and FILTER) */
 static int test_lead_pages(void)
 {
-    int ok = 1, saw_mix = 0, saw_filter = 0, saw_edit2 = 0, saw_edit1 = 0, saw_osc2 = 0, saw_menv = 0, other_edit2 = 0;
+    int ok = 1, saw_mix = 0, saw_filter = 0, saw_edit2 = 0, saw_edit1 = 0, saw_osc2 = 0, saw_menv = 0, saw_fmix = 0, saw_fenv = 0, other_edit2 = 0;
     uint32_t i, e;
     ui_power_on();
     TSEL->eng_req = ENGI_LEAD;
@@ -9672,11 +9672,17 @@ static int test_lead_pages(void)
         if (str_eq(pg->title, "EDIT 2"))
             saw_edit2 = 1;
         if (str_eq(pg->title, "MIX"))
-            saw_mix = pg->id[0] == P_E4 && pg->id[1] == P_E5 && pg->id[2] == P_FM2_SUS;
+            saw_mix = pg->id[0] == P_E4 && pg->id[1] == P_E5 && pg->id[2] == 0xFF;
+        if (str_eq(pg->title, "FLT MIX"))
+            saw_fmix = pg->id[0] == P_FM2_SUS && pg->id[1] == P_FM4_ATK && pg->id[2] == 0xFF;
+        if (str_eq(pg->title, "FLT ENV"))
+            saw_fenv = pg->id[0] == P_FM4_DEC && pg->id[1] == P_FM4_SUS && pg->id[2] == P_FM4_REL && pg->id[3] == P_FM4_LEVEL;
+        if (str_eq(pg->title, "FLT ENV 2"))
+            saw_edit2 = 1;                                  /* (gone: the ADSR is all on FLT ENV) */
         if (str_eq(pg->title, "FILTER"))
             saw_filter = pg->id[0] == P_FM2_ATK && pg->id[1] == P_E6 && pg->id[2] == P_E7 && pg->id[3] == P_FM2_DEC;
     }
-    ok = saw_mix && saw_filter && saw_edit1 && saw_osc2 && saw_menv && !saw_edit2;
+    ok = saw_mix && saw_filter && saw_fmix && saw_fenv && saw_edit1 && saw_osc2 && saw_menv && !saw_edit2;
     for (e = 0; e < NENGINES; e++) {                      /* every other engine keeps its EDIT 2 */
         if (e == ENGI_LEAD || ENGINES[e]->name[0] == '-')
             continue;
@@ -9687,7 +9693,7 @@ static int test_lead_pages(void)
     }
     ok &= other_edit2 > 5;
     if (!ok) printf("  lead pages: mix %d filter %d edit2 %d other_edit2 %d\n", saw_mix, saw_filter, saw_edit2, other_edit2);
-    return check("LEAD: pages EDIT 1, MIX (MIX XMOD SAT), OSC 2, FILTER (FTYP CUT RES KEY), MOD ENV; no EDIT 2; the other engines keep theirs", ok);
+    return check("LEAD: pages EDIT 1, MIX (MIX XMOD), OSC 2, FILTER (FTYP CUT RES KEY), FLT MIX (SAT FAMT), FLT ENV (FATK FDEC FSUS FREL), MOD ENV; no EDIT 2; the other engines keep theirs", ok);
 }
 
 static int test_help(void)

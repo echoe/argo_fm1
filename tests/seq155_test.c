@@ -312,8 +312,8 @@ static int old_accepts(const project_store_t *p)   /* 1.5 / 1.5.1's proj_unpack 
 {
     uint32_t t, i, base;
     for (t = 0; t < NTRK; t++)
-        for (i = 0; i < NSTEP; i++) {
-            base = 68u + t * (P_COUNT + 2u + NSTEP * 9u) + P_COUNT + 2u + i * 9u;
+        for (i = 0; i < NSTEP_REC; i++) {
+            base = 68u + t * (P_COUNT + 2u + NSTEP_REC * 9u) + P_COUNT + 2u + i * 9u;
             if ((p->raw[base + 8u] & 127u) > 101u)
                 return 0;
         }
@@ -572,20 +572,20 @@ static int test_double_half(void)
     btn_up(B_SEQ); frame();
     hold(B_SAVE);
     bad += check("  SAVE held: the last HALF undone (LEN 2)", t->p[P_SLEN] == 2);
-    {   /* LEN 40: 64 (the first 24 copied); 64: no room; the 128 records full: refused */
+    {   /* LEN NSTEP - 24: NSTEP (the first 24 copied); NSTEP: no room; the 128 records full: refused */
         t = melody(0xFFFFu);
-        t->p[P_SLEN] = 40;
+        t->p[P_SLEN] = NSTEP - 24;
         for (i = 16; i < NSTEP; i++)
             t->step[i] = (step_t){{(uint8_t)(20u + i)}, 1, ST_NOTE, 0, 0};
         memcpy(ref, t->step, sizeof ref);
         btn_down(B_SEQ); frame();
         tkey(12);
-        ok = t->p[P_SLEN] == 64 && !memcmp(t->step, ref, 40u * sizeof ref[0]) && !memcmp(t->step + 40, ref, 24u * sizeof ref[0]);
+        ok = t->p[P_SLEN] == NSTEP && !memcmp(t->step, ref, (NSTEP - 24u) * sizeof ref[0]) && !memcmp(t->step + (NSTEP - 24u), ref, 24u * sizeof ref[0]);
         memcpy(ref, t->step, sizeof ref);
         undo.trk = 0;
         tkey(12);
-        ok &= t->p[P_SLEN] == 64 && msg_is("64 STEPS: NO ROOM") && !undo.trk && !memcmp(t->step, ref, sizeof ref);
-        bad += check("DOUBLE from LEN 40: 64 (steps 1..24 copied); at 64: NO ROOM, nothing done", ok);
+        ok &= t->p[P_SLEN] == NSTEP && msg_is(NSTEP == 128 ? "128 STEPS: NO ROOM" : "64 STEPS: NO ROOM") && !undo.trk && !memcmp(t->step, ref, sizeof ref);
+        bad += check("DOUBLE from LEN NSTEP - 24: NSTEP (steps 1..24 copied); at NSTEP: NO ROOM, nothing done", ok);
         t->p[P_SLEN] = 8;
         for (i = 0; motion.count < MOTION_MAX - 4u; i++)
             motion_set_event(&trk[1 + i % 3u], i / 3u % NSTEP, P_REV + i / 192u, (int16_t)(i % 100u));
