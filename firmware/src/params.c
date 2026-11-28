@@ -69,8 +69,8 @@ static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9
 static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2k", "2.8k", "3.7k", "4.4k", "5.5k",
                                       "7.4k", "8.8k", "11k", "15k", "22k", "44k", 0};
 /* GRAIN: SIZE in ms (16 even parts, fx.c IG_SIZE) and PITCH in semitones (25 even parts, IG_RATIO; 64 is 0) */
-static const char *const N_ISIZE[] = {"5", "6", "7", "9", "11", "13", "16", "20", "24", "29", "35", "43", "52", "63", "76",
-                                      "93", 0};
+static const char *const N_ISIZE[] = {"2.5", "3", "3.7", "4.5", "5.4", "6.6", "8", "9.8", "12", "14", "18", "21", "26", "31",
+                                      "38", "46", 0};
 static const char *const N_IPITCH[] = {"-12", "-11", "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0", "+1",
                                        "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", 0};
 /* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels).
@@ -82,7 +82,7 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
 /* 1.8: AFTERTOUCH SENS, the keys' pressure (keytouch.c): OFF (the keys send none; the routing still takes MIDI's), 1 the
  * firmest lean for full pressure .. 10 the lightest */
 static const char *const N_ATSNS[] = {"OFF", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
-static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", FELUCCA_SAMPLE ? "SAMPLE" : "-", "VOICE", "TRIO", "WHEEL",
+static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", FELUCCA_SAMPLE ? "SAMPLE" : "-", "VOICE", "TRIO", FELUCCA_OPX ? "OPX" : "-",   /* 7: OPX, WHEEL's slot ("-": a retired engine's number) */
                                              FELUCCA_GRAIN ? "GRAIN" : "-", "PHYS", "DRUM", "LEAD", "FM6",
                                              FELUCCA_SLICE ? "SLICE" : "-",   /* ("-": a retired engine's number, ENG_FM4_GONE) */
 #if FELUCCA_SHDRUM
@@ -357,12 +357,21 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
     v = clamp(v, d->min, d->max);
     if (d->names == N_FM6_PATCH)
         return v > (int32_t)FM6_OWN ? (int32_t)FM6_OWN : v;
+#if FELUCCA_OPX
+    if (d->names == N_OPX_SLOT)                    /* (OPX fork: a factory patch this firmware lacks, F13.. of Solo's in
+                                                    * OPX: F1. A sound that brings its patch: OWN, opx_store.c) */
+        return v >= (int32_t)OPX_NFACTORY && v < (int32_t)OPX_OWN ? 0 : v;
+#endif
     return d->names == N_DRUM_KIT ? enum_orig(d, v) : v;
 }
 
 /* v is a value a knob passes over: an alias, or one of FM6's bank slots without a voice */
 static int enum_skip(const param_desc_t *d, int32_t v)
 {
+#if FELUCCA_OPX
+    if (d->names == N_OPX_SLOT && v >= (int32_t)OPX_NFACTORY && v < (int32_t)OPX_OWN)
+        return 1;                                  /* (OPX fork: SLOT past this firmware's factory patches, to OWN) */
+#endif
     return enum_orig(d, v) != v || (d->names == N_FM6_PATCH && !fm6_slot_ok(v));
 }
 /* a knob moved an F_ENUM from `from` to v: past any value it skips in that direction; with none left to the end, the
@@ -528,7 +537,8 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_SEQS, GR_GENS, GR_CPK, GR_SLCR2 };   /* GR_SLCR2 (Argo): SLICER 2, the USER pattern's 16-step grid */   /* GR_SEQS (1.6): SEQ > SEQUENCE, the eight sequences of each track */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_SEQS, GR_GENS, GR_CPK, GR_SLCR2,
+       GR_OPXL, GR_OPXE, GR_OPXV, GR_OPXK, GR_OPXP, GR_OPXF };   /* GR_OPXL..: the OPX engine's pages, a range (ui_fm6op.c xop_page) */   /* GR_SLCR2 (Argo): SLICER 2, the USER pattern's 16-step grid */   /* GR_SEQS (1.6): SEQ > SEQUENCE, the eight sequences of each track */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
 typedef struct {
     const char *title;
@@ -559,6 +569,9 @@ static const page_t PAGES[] = {
     {"CHORDS", FAM_SCL, SC_TRK, GR_CPK, {0, 1, 2, 3}},    /* 1.6.1_sequences: CHRD PLAY's chord packs: what each black key does
                                                           * (chord.c cpk); the SCL family's last page (was SAVE's) */
 #endif
+#if FELUCCA_OPX
+    {"ALGO", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E7}},   /* OPX only (OPX fork): the opsix's HOME (ALG */
+#endif                                                                   /* ATK DEC) and SLOT, in place of EDIT 1 / 2 */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (1.5, #104): TYPE CUT RES KTR */
@@ -610,6 +623,14 @@ static const page_t PAGES[] = {
     {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},    /* FM6 only: KNOB 1 the operator, then its */
     {"OP ENV", FAM_EDIT, SC_TRACK, GR_FMENV, {0xFF, 0xFF, 0xFF, 0xFF}},     /* bytes of the track's patch (ui_fm6op.c): */
     {"OPERATOR 2", FAM_EDIT, SC_TRACK, GR_FMOP2, {0xFF, 0xFF, 0xFF, 0xFF}}, /* CRS FINE LEVEL / STG RATE LEVEL / MODE DTUN VEL */
+#if FELUCCA_OPX
+    {"OPERATORS", FAM_EDIT, SC_TRACK, GR_OPXL, {0xFF, 0xFF, 0xFF, 0xFF}},   /* OPX only (OPX fork): KNOB 1 the operator, 2 */
+                                                                             /* the section (PAGE), 3 its row, 4 the value */
+    {"ENVELOPE", FAM_EDIT, SC_TRACK, GR_OPXE, {0xFF, 0xFF, 0xFF, 0xFF}},    /* .. the operator's EG drawn, ATK DEC SUS REL */
+    {"OP GRID", FAM_EDIT, SC_TRACK, GR_OPXV, {0xFF, 0xFF, 0xFF, 0xFF}},        /* .. PRESETS the row, KNOB 1..4 the four operators' value in it */
+    {"EG1-3", FAM_EDIT, SC_TRACK, GR_OPXP, {0xFF, 0xFF, 0xFF, 0xFF}},          /* .. M4: EG1 (pitch) drawn, its rows */
+    {"LFO1-3", FAM_EDIT, SC_TRACK, GR_OPXF, {0xFF, 0xFF, 0xFF, 0xFF}},         /* .. M4: LFO1 drawn, its rows, PROG PITCH */
+#endif
     {"OP1 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}},
     {"OP2 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM2_ATK, P_FM2_DEC, P_FM2_SUS, P_FM2_REL}},
     {"OP3 ENV", FAM_EDIT, SC_TRACK, GR_ADSR, {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}},
@@ -644,6 +665,9 @@ static const page_t PAGES[] = {
 #endif
     /* HOME's pages (1.2): HOME tapped on HOME the MIXER (up to 1.1.5 GLO's; LEVEL PAN REV MUTE), again CLOCK (up to 1.1.5
      * GLO > GLOBAL; its TUNE is MENU > AUDIO's now), again HOME (ui.c home_tap) */
+#if FELUCCA_OPX
+    {"OP MIX", FAM_TRK, SC_TRACK, GR_OPXK, {0xFF, 0xFF, 0xFF, 0xFF}},   /* OPX only (OPX fork): HOME's first on an OPX track: */
+#endif                                                                /* KNOB 1..4 = OP 1..4 LEVEL */
     {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
     {"CLOCK", FAM_TRK, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
 };

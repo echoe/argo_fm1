@@ -171,6 +171,7 @@
     <nav class="tabs" id="tabs" role="tablist">
       <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
       <button role="tab" data-tab="fm6" data-t="tabFm6" data-ic="ui_knob"></button>
+      <button role="tab" data-tab="opx" data-t="tabOpx" data-ic="ui_knob"></button>
       <button role="tab" data-tab="lead" data-t="tabLead" data-ic="ui_knob"></button>
       <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
       <button role="tab" data-tab="tracks" data-t="tabTracks" data-ic="ui_slider_vertical"></button>
@@ -224,6 +225,32 @@
       <div id="fm6ops"></div>
     </div>
   </section>
+  <section class="panel" id="p-opx" data-tab="opx" data-dev hidden>
+    <p class="dim" data-t="opxHelp"></p>
+    <div class="group">
+      <h2 data-t="opxSource" data-ic="symbol_folder"></h2>
+      <p class="bar"><label><span data-t="track"></span> <select id="opxtrk"></select></label>
+        <button id="opxread" data-t="opxReadBtn"></button> <button id="opxsend" data-t="opxSendBtn"></button>
+        <label><input type="checkbox" id="opxlive"> <span data-t="opxLive"></span></label></p>
+      <p class="bar"><label><span data-t="opxFactories"></span> <select id="opxslot"></select></label>
+        <button id="opxload" data-t="load"></button> <button id="opxinit" data-t="opxInit"></button></p>
+      <p class="bar"><button id="opximport" data-t="opxImport" data-ic="symbol_upload"></button>
+        <input type="file" id="opxfile" accept=".opx,application/octet-stream" hidden>
+        <button id="opxexport" data-t="opxExport" data-ic="symbol_download"></button></p>
+      <p class="dim" data-t="opxKeep"></p>
+      <p class="bar"><button id="opxtests" data-t="opxTestsBtn"></button></p>
+      <p class="dim" data-t="opxTestsHelp"></p>
+    </div>
+    <div class="group">
+      <h2 data-t="opxPatch" data-ic="ui_knob"></h2>
+      <div id="opxpatch"></div>
+    </div>
+    <div class="group">
+      <h2 data-t="opxOps" data-ic="function_env_adsr_exp"></h2>
+      <div id="opxops"></div>
+    </div>
+  </section>
+
 
   <section class="panel" id="p-lead" data-tab="lead" data-dev hidden>
     <p class="dim" data-t="ldxHelp"></p>
@@ -383,7 +410,10 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71,
+  OPX_GET: 121, OPX_PUT: 122 };                    /* (OPX fork: firmware/src/editor_opx.c) */
+/* OPX fork: OPX patches (INFO opx): targets 0 a track, 1 a factory patch, 2 a user preset's; the record as 337 bytes */
+const OPX = { TARGET: { TRACK: 0, FACTORY: 1, USER: 2 } };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
@@ -477,6 +507,10 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
+    o.opx = null;                                 /* OPX fork: the last block, 4F 01 version size(2) factories engine */
+    const q = trailer.length - 7;
+    if (q >= 0 && trailer[q] === 0x4F && trailer[q + 1] === 1)
+      o.opx = { version: trailer[q + 2], bytes: trailer[q + 3] | trailer[q + 4] << 7, factory: trailer[q + 5], engine: trailer[q + 6] };
     return o;
   },
   [CMD.UI_STATE](a) {
@@ -548,6 +582,8 @@ const parse = {
     const r = new Reader(a);
     const o = { nslots: r.b(), slotKiB: r.b(), slots: [] };
     for (let i = 0; i < o.nslots; i++) o.slots.push({ zones: r.b(), name: r.s(), kib: r.b() });
+    /* OPX fork: then each slot's own size in KiB (a firmware without it: every slot is slotKiB) */
+    for (const u of o.slots) u.capKiB = r.i < r.a.length ? r.b() : o.slotKiB;
     return o;
   },
   [CMD.UP_LIST](a) {
@@ -609,6 +645,9 @@ const parse = {
     return o;
   },
   [CMD.FM6_ERASE](a) { return { index: a[0], rc: a[1] }; },
+  /* OPX fork: packed is the record (Uint8Array, info.opx.bytes long), null on an error */
+  [CMD.OPX_GET](a) { return { target: a[0], index: a[1], rc: a[2], packed: a[2] ? null : unpack7(a.slice(3)) }; },
+  [CMD.OPX_PUT](a) { return { target: a[0], index: a[1], rc: a[2] }; },
 };
 
 /* a name the device accepts: printable ASCII, 1..12 characters */
@@ -677,6 +716,9 @@ const req = {
   fm6Put: (target, i, packed) => [CMD.FM6_PUT, [target & 0x7F, i & 0x7F, ...packed.map((x) => x & 0x7F)]],
   fm6List: () => [CMD.FM6_LIST, []],
   fm6Erase: (i) => [CMD.FM6_ERASE, [i & 0x7F]],
+  /* OPX fork: OPX patches (firmware with info.opx) */
+  opxGet: (target, i) => [CMD.OPX_GET, [target & 0x7F, i & 0x7F]],
+  opxPut: (target, i, packed) => [CMD.OPX_PUT, [target & 0x7F, i & 0x7F, ...pack7(packed)]],
 };
 
 /* which reply belongs to which request (the device echoes these) */
@@ -694,6 +736,7 @@ function replyMatches(cmd, args, a) {
     case CMD.SMP_WRITE: return a[0] === args[0] && a[1] === args[1] && a[2] === args[2] && a[3] === args[3];
     case CMD.SONG: return a[0] === args[0];
     case CMD.FM6_GET: case CMD.FM6_PUT: return a[0] === args[0] && a[1] === args[1];
+    case CMD.OPX_GET: case CMD.OPX_PUT: return a[0] === args[0] && a[1] === args[1];
     case CMD.FM6_ERASE: return a[0] === args[0];
     case CMD.PROJECT: return a[0] === args[0] && a[1] === args[1];
     case CMD.UP_LIST: case CMD.UP_GET: case CMD.UP_PUT: case CMD.UP_STORE: case CMD.UP_LOAD: case CMD.UP_ERASE:
@@ -833,6 +876,11 @@ function fmtValue(d, v) {
    byte for byte: web/test_web.mjs compares them. */
 const SMP = { SLOT_SIZE: 0x14000, DATA_OFF: 512, RATE: 22050, HDR_LEN: 32 + 16 * 28, MAX_ZONES: 16 };
 SMP.MAX_DATA = SMP.SLOT_SIZE - SMP.DATA_OFF;
+/* OPX fork: the data bytes slot k takes on the connected device (SMP_INFO's per-slot size; slot 3 is smaller there) */
+const smpMax = (k) => {
+  const c = typeof dev !== "undefined" && dev && dev.smp && dev.smp.slots[k] ? dev.smp.slots[k].capKiB : 0;
+  return c ? Math.min(SMP.MAX_DATA, c * 1024 - SMP.DATA_OFF) : SMP.MAX_DATA;
+};
 
 /* groups of up to 7 bytes, each preceded by their top bits */
 function pack7(b) {
@@ -1144,6 +1192,8 @@ function cleanPatch(pt) {
   if (Number.isInteger(pt.slot)) o.slot = pt.slot;
   if (Array.isArray(pt.fm6) && pt.fm6.length === FM6.PACKED) o.fm6 = pt.fm6.map((x) => (x | 0) & 127);   /* (a converted */
   if (Array.isArray(pt.fm4)) o.fm4 = pt.fm4.map((v) => (Number.isFinite(v) ? Math.round(v) : null));    /* DIGITAL sound) */
+  if ((Array.isArray(pt.opx) || ArrayBuffer.isView(pt.opx)) && pt.opx.length === 337)   /* (OPX fork: an OPX sound's own */
+    o.opx = Array.from(pt.opx, (x) => (x | 0) & 255);                                     /* patch, the packed record) */
   return o;
 }
 
@@ -1236,11 +1286,17 @@ const bank = {
       const g = parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.USER, slot)));
       if (!g.rc) u.fm6 = g.packed;
     }
+    if (u.used && info.opx && u.engine === info.opx.engine) {   /* (OPX fork: an OPX sound's own patch) */
+      const g = parse[CMD.OPX_GET](await rq(req.opxGet(OPX.TARGET.USER, slot)));
+      if (!g.rc) u.opx = g.packed;
+    }
     return u;
   },
   /* -> rc (0 ok); with info, an FM6 sound's patch (pt.fm6) goes with it */
   async put(rq, slot, pt, info) {
     const rc = parse[CMD.UP_PUT](await rq(req.upPut(slot, pt), FLASH_OPT)).rc;
+    if (!rc && pt.opx && info && info.opx && pt.engine === info.opx.engine)   /* (OPX fork: its patch with it) */
+      return parse[CMD.OPX_PUT](await rq(req.opxPut(OPX.TARGET.USER, slot, pt.opx), FLASH_OPT)).rc;
     if (rc || !pt.fm6 || !presetPatches(info) || info.engines[pt.engine] !== "FM6") return rc;
     return parse[CMD.FM6_PUT](await rq(req.fm6Put(FM6.TARGET.USER, slot, pt.fm6), FLASH_OPT)).rc;
   },
@@ -1261,8 +1317,14 @@ async function capturePatch(rq, info, name) {
     const g = parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK, sel)));
     if (!g.rc) fm6 = g.packed;
   }
+  let opx = null;                                      /* (OPX fork: an OPX track's own patch) */
+  if (info.opx && dump.engine === info.opx.engine) {
+    const sel = info.ntrk ? parse[CMD.TRACK](await rq(req.track())).sel : 0;
+    const g = parse[CMD.OPX_GET](await rq(req.opxGet(OPX.TARGET.TRACK, sel)));
+    if (!g.rc) opx = g.packed;
+  }
   return { patch: cleanPatch({ name, engine: dump.engine, engineName: info.engines[dump.engine], p: dump.p, pattern: patternFromSteps(steps),
-    grid: drum ? gridFromSteps(steps) : null, fm6 }), dump, steps };
+    grid: drum ? gridFromSteps(steps) : null, fm6, opx }), dump, steps };
 }
 
 /* the track's own parameters, which no sound load changes (ui.c param_kept): LEVEL, the ARP and ARP 2 pages,
@@ -1290,6 +1352,8 @@ async function auditionPatch(rq, info, pt, opt = {}) {
   }
   if (pt.fm6 && info.fm6)                         /* a converted DIGITAL sound: its own FM6 patch on the track */
     await rq(req.fm6Put(FM6.TARGET.TRACK, opt.track ?? 0, pt.fm6));
+  if (pt.opx && info.opx && pt.engine === info.opx.engine)   /* (OPX fork: an OPX sound's own patch on the track) */
+    await rq(req.opxPut(OPX.TARGET.TRACK, opt.track ?? 0, pt.opx));
   return {};
 }
 
@@ -2053,7 +2117,7 @@ function makeMockDevice(opt = {}) {
     D("SIZE", F.PCT, 0, 127, 90), D("DAMP", F.PCT, 0, 127, 60), D("RATE", F.INT, 0, 127, 64), D("DEPTH", F.PCT, 0, 127, 60),
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
-    E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "-", "VOICE", "TRIO", "WHEEL",
+    E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "-", "VOICE", "TRIO", "OPX",
       "-", "PHYS", "DRUM", "LEAD", "FM6", "-", "SHDRUM", "SWARM", "FMTONE", "WAVETONE"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
@@ -2100,12 +2164,14 @@ function makeMockDevice(opt = {}) {
       presets: [P("FAT BASS", [0, 0, -12, 9, 0, 62, 45, 64], [0, 62, 60, 25], 1, 2), P("ARP LEAD", [2, 12, 0, 4, 0, 88, 25, 32], [0, 60, 90, 30], 0, 13),
         P("SYNC LEAD", [9, 9, 0, 0, 0, 82, 30, 64], [2, 70, 100, 40], 1, 4), P("RING BELL", [13, 0, 18, 6, 1, 96, 30, 64], [0, 92, 0, 80], 0, 7),
         P("CHIP CHOIR", [1, 0, 12, 7, 1, 62, 95, 40], [70, 90, 110, 85], 0, 5)] },
-    { name: "WHEEL", titles: ["BARS", "TONE"], edit: [E("REG", ["FLUTE", "MELLO", "HOLLW", "SMOOT", "3BAR", "BLUES", "GOSPL", "ROCK",
-        "TOPS", "CLARI", "REED", "STRNG", "CHAPL", "BRITE", "BASS", "FULL"], 4), D("SUB", F.INT, -8, 8, 0), D("BODY", F.INT, -8, 8, 0), D("TOP", F.INT, -8, 8, 0),
-        E("PERC", ["OFF", "2ND", "3RD", "2SOFT", "3SOFT", "2SLOW", "3SLOW"], 0), D("CLICK", F.PCT, 0, 127, 40), D("DRV", F.PCT, 0, 127, 0), E("ROTR", ["OFF", "SLOW", "FAST"], 1)],
-      presets: [P("FULL ORGAN", [15, 0, 0, 0, 0, 30, 20, 1], [0, 64, 127, 45], 0, 5), P("JAZZ PERC", [4, 0, 0, 0, 2, 50, 8, 1], [0, 64, 127, 40], 0, 3),
-        P("GOSPEL", [6, 0, 0, 0, 1, 60, 40, 2], [0, 64, 127, 45], 0, 6), P("SOFT FLUTE", [1, 0, -2, 0, 0, 10, 0, 1], [0, 64, 127, 55], 0, 5),
-        P("ROCK DRIVE", [7, 0, 0, 0, 0, 70, 100, 2], [0, 64, 127, 40], 0, 4)] },
+    /* OPX (eng_opx.c; WHEEL's slot 7): four operators, one to a knob. ALG 0 = the patch's own, 1..8 the four-operator algorithms, 9 = USER */
+    { name: "OPX", titles: ["ALGO", "MOD"], edit: [D("ALG", F.INT, 0, 9, 0), D("ATK", F.BIPCT, -64, 63, 0),
+        D("DEC", F.BIPCT, -64, 63, 0), D("MLVL", F.BIPCT, -64, 63, 0), D("FB", F.BIPCT, -64, 63, 0), D("MRAT", F.INT, -16, 16, 0),
+        D("DTUN", F.PCT, 0, 127, 0), D("SLOT", F.INT, 0, 127, 0)],   /* (F1..F8 0..7, OWN 126, INIT 127) */
+      presets: [P("E.PIANO", [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 127, 0], 0, 6), P("BELL", [0, 0, 0, 0, 0, 0, 0, 1], [0, 0, 127, 0], 0, 7),
+        P("FM BASS", [0, 0, 0, 0, 0, 0, 0, 2], [0, 0, 127, 0], 1, 2), P("BRASS", [0, 0, 0, 0, 0, 0, 0, 3], [0, 0, 127, 0], 0, 4),
+        P("SAW LEAD", [0, 0, 0, 0, 0, 0, 0, 4], [0, 0, 127, 0], 1, 4), P("FM PAD", [0, 0, 0, 0, 0, 0, 0, 5], [0, 0, 127, 0], 0, 5),
+        P("X-MOD", [0, 0, 0, 0, 0, 0, 0, 6], [0, 0, 127, 0], 0, 3), P("DRAWBARS", [0, 0, 0, 0, 0, 0, 0, 7], [0, 0, 127, 0], 0, 6)] },
     /* 8: retired (GRAIN, src/engines.c: FELUCCA_SMPENG=0; ENG_FM4_GONE) */
     { name: "-", titles: ["-", "-"], edit: [D("-", F.INT, 0, 7, 0), D("-", F.INT, 0, 14, 1), D("-", F.INT, 0, 14, 1),
         D("-", F.INT, 0, 14, 1), D("-", F.PCT, 0, 127, 60), D("-", F.INT, 0, 127, 60), D("-", F.PCT, 0, 127, 0), NONE],
@@ -2449,6 +2515,7 @@ function makeMockDevice(opt = {}) {
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
             if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
         }
+        if (opt.opx) { b(0x4F); b(1); b(2); b(337 & 127); b(337 >> 7); b(opt.opx.factory ? opt.opx.factory.length : 8); b(opt.opx.engine); }   /* (OPX fork, last) */
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -2514,6 +2581,27 @@ function makeMockDevice(opt = {}) {
         const x = st.step[a[0]];
         if (cmd === CMD.STEP_SET && a.length >= 9) stepIn(x, a.slice(1));
         b(a[0]); stepOut(x, b);
+        break;
+      }
+      case CMD.OPX_GET: case CMD.OPX_PUT: {       /* OPX fork (editor_opx.c): the records as bytes, unchecked */
+        if (!opt.opx) return null;
+        const user = (k) => k < NB && st.bank[k] && st.bank[k].engine === opt.opx.engine;
+        let rc = a.length < 2 ? 1 : 0, pk = null;
+        if (cmd === CMD.OPX_GET) {
+          if (!rc && a[0] === 0 && a[1] < NTRK) pk = st.tracks[a[1]].opx || opt.opx.factory[0];
+          else if (!rc && a[0] === 1 && a[1] < opt.opx.factory.length) pk = opt.opx.factory[a[1]];
+          else if (!rc && a[0] === 2 && a[1] < NB) { pk = user(a[1]) ? st.bank[a[1]].opx : null; rc = pk ? 0 : 2; }
+          else rc = 1;
+          b(a[0] ?? 127); b(a[1] ?? 127); b(rc);
+          if (!rc) pack7(pk).forEach(b);
+        } else {
+          pk = rc ? null : unpack7(a.slice(2));
+          if (!pk || pk.length !== 337) rc = 1;
+          else if (a[0] === 0 && a[1] < NTRK) st.tracks[a[1]].opx = pk;
+          else if (a[0] === 2 && a[1] < NB) { if (user(a[1])) st.bank[a[1]].opx = pk; else rc = 2; }
+          else rc = 1;
+          b(a[0] ?? 127); b(a[1] ?? 127); b(rc);
+        }
         break;
       }
       case CMD.FM6_GET: case CMD.FM6_PUT: case CMD.FM6_LIST: case CMD.FM6_ERASE: {   /* editor_fm6.c */
@@ -2776,7 +2864,7 @@ async function readDevicePreferences(rq, info, names, previous = null) {
    and 4, once TRANH and PERC: PIANO 0), else the last with it (DRUM KIT 1..3, once HAND CYM H+CYM: 66 10 77 at 6 5 8;
    EDITOR_PROTOCOL.md). -> the original's index */
 function aliasOf(names, i) {
-  if (!names || names[i] == null) return i;
+  if (!names || names[i] == null || names[i] === "-") return i;   /* "-" (a reserved number, OPX fork: two of them) is no name */
   const k = names[0] === names[i] ? 0 : names.lastIndexOf(names[i]);
   return k >= 0 ? k : i;
 }
@@ -2797,7 +2885,7 @@ function enumShown(d) {
 /* the order the device shows its engines in (src/engines.c ENGINE_ORDER): the lists here follow it, the protocol keeps
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
-const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "LEAD",
+const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "OPX", "GRAIN", "PHYS", "LEAD",
   "SLICE", "DRUM", "SHDRUM", "SWARM", "FMTONE", "WAVETONE"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
@@ -2833,7 +2921,6 @@ const el = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 /* ---------------------------------------------------------------- icons --- */
 /* Fukiai glyphs by their names in hugelton-plugin-rules lib/include/hugelton/Glyphs.h */
 const GLYPH = {
@@ -2875,6 +2962,26 @@ const TEXT = {
   ja: {
     tabFm6: "6-OP FM", fm6Help: "FM6 エンジンの音色（6 オペレーター）をまるごと編集します。本体のノブはこの音色の上にかかるマクロです。SysEx を読み込み、音色を選んで編集し、トラックへ送るとすぐ鳴ります。トラックの音色はひとつで、読み込んだものがそのトラックの音色になります（SLOT は OWN）。",
     fm6Source: "音色の出し入れ", fm6ReadBtn: "トラックから読む", fm6SendBtn: "トラックへ送る", fm6Live: "編集しながら送る",
+    tabOpx: "OPX", opxHelp: "OPX エンジンの音色をまるごと編集します（本体の EDIT > OPERATORS と同じ値）。トラックから読み、編集してトラックへ送るとすぐ鳴ります。送った音色はそのトラックの音色になります（SLOT は OWN）。",
+    opxSource: "音色の出し入れ", opxReadBtn: "トラックから読む", opxSendBtn: "トラックへ送る", opxLive: "編集しながら送る",
+    opxFactories: "ファクトリー音色", opxInit: "初期音色", opxImport: "ファイルを読み込む", opxExport: "ファイルに書き出し",
+    opxKeep: "残すには、トラックへ送ってから本体でユーザープリセット（SAVE、OPX は 16 個まで）かプロジェクトに保存してください。",
+    opxPatch: "音色", opxOps: "オペレーター", opxMode: "モード", opxPitch: "ピッチ", opxEg: "EG", opxKtrk: "キートラック",
+    askOk: "OK", askCancel: "キャンセル",
+    opxTestsBtn: "テスト音色を空きユーザープリセットへ", opxTestsHelp: "opsix 比較用の 16 のテスト音色（T01〜T17）を空いているユーザープリセットに書き込みます。使用中のスロットには書きません。FM-1 で OPX のトラックを選んでから押してください（そのトラックの VOICE などの設定が使われます）。",
+    opxTestsConfirm: "テスト音色 {m} 個のうち {n} 個を空きユーザープリセットに書き込みます。よろしいですか？", opxTestsNeedOpx: "FM-1 で OPX のトラックを選んでください",
+    opxTestsNoRoom: "空きユーザープリセットがありません（OPX は 16 個まで）", opxTestsProgress: "テスト音色を書き込み中", opxTestsDone: "テスト音色を書き込みました", opxTestsLeft: "は空きがなく書き込めませんでした",
+    opxEg1: "EG1（ピッチ）・EG2（フィルター）・EG3", opxLfo1: "LFO1（オペレーター）・LFO2（フィルター）・LFO3",
+    opxFx: "エフェクト FX1–3", opxFxHelp: "直列に FX1 → FX2 → FX3。「not available」のタイプは OPX（4 パート）ではメモリが足りません。OPX Solo では鳴ります。ここではパッチに保存され、音をそのまま通します。数値はそのタイプの単位（入力欄は内部の値、右に表示値）。",
+    opxFlt: "フィルター", opxFltHelp: "ボイスごとに1基。LPF 12 が全開・RESO 0・モジュレーションなし（INIT）のときは処理を省きます。KTRK の傾き: 1.00 で1半音につき1半音。",
+    opxVp: "バーチャル・パッチ 1–12", opxVpHelp: "* の付いたデスティネーションはパッチに保存されますが、まだ効きません（エフェクトなど）。INT の単位はデスティネーションの全範囲に対する割合です（PITCH は半音）。", opxProg: "プログラム ピッチ", opxVoice: "レベルとボイス", opxVoiceHelp: "LEVEL は INIT の −6.0 dB が以前と同じ音量です。BEND はこのパッチを鳴らすトラックのピッチベンド幅です。ボイスの設定（ASSIGN・GLIDE・UNISON）はパッチを選んだときにトラックの VOICE に入ります（GLIDE は 1.46 秒まで、UNISON は 6 ボイスまで）。", opxMod: "モジュレーション（P MOD・L MOD、INT は 0.01 半音単位）",
+    opxLfoHelp: "FADE は KSYNC が OFF のときは効きません。CTRL は選んだソースの値を INT に掛けます（OFF: INT のまま）。",
+    opxUser: "USER アルゴリズム", opxUserHelp: "行が送り先、列が送り元のオペレーター（対角はセルフフィードバック）。OUT: 直接出力。",
+    opxAlg: "アルゴリズム", opxAlgFb: "ALG FB", opxNoise: "ノイズ波形では FB と WIDTH は効きません",
+    opxSent: "トラックへ送りました:", opxRead: "トラックから読みました", opxLoaded: "読み込みました",
+    opxBadFile: "OPX の音色ファイルではありません（337 バイト、このファームウェアの形式）",
+    opxNeedDevice: "FM-1 を接続すると OPX の音色を編集してトラックへ送れます。",
+    opxNoFw: "このファームウェアには OPX がありません。OPX 0.2 以降に更新すると使えます。",
     tabLead: "LEAD", leadNoEngine: "このファームウェアには LEAD エンジンがありません",
     ldxTitle: "ハードウェアのパッチ", ldxHelp: "LEAD の元になったハードウェアシンセの SysEx（工場出荷プログラムの SysEx ファイル）を LEAD の音に変換して選択トラックへ送り、LEAD の音をそのハードウェアのプログラムとして書き出せます。対応しているのは一部の項目だけです（OSC 波形、OSC 2 ピッチ / ファイン、アンプエンベロープ、フィルタータイプ）。それ以外は LEAD の初期値（読み込み）または典型値（書き出し）になります。項目ごとに、対応づけの確かさを表示します。",
     ldxImport: "SysEx を読み込む", ldxExport: "SysEx に書き出し", ldxApply: "LEAD に送る", ldxProg: "プログラム", ldxGuess: "推測の項目も使う",
@@ -2984,6 +3091,26 @@ const TEXT = {
   en: {
     tabFm6: "6-OP FM", fm6Help: "Edit the whole patch of the FM6 engine (six operators). The device's knobs are macros on top of it. Import a SysEx file, pick a voice, edit it and send it to a track: it plays at once. A track has one patch: whatever you load becomes it (SLOT shows OWN).",
     fm6Source: "Patches in and out", fm6ReadBtn: "Read from track", fm6SendBtn: "Send to track", fm6Live: "Send while editing",
+    tabOpx: "OPX", opxHelp: "Edit the whole patch of the OPX engine (the values of EDIT > OPERATORS on the device). Read a track, edit, send it back: it plays at once. What you send becomes the track's patch (SLOT shows OWN).",
+    opxSource: "Patches in and out", opxReadBtn: "Read from track", opxSendBtn: "Send to track", opxLive: "Send while editing",
+    opxFactories: "Factory patch", opxInit: "Init patch", opxImport: "Import file", opxExport: "Export file",
+    opxKeep: "To keep a patch, send it to a track, then save a user preset (SAVE; up to 16 OPX ones) or a project on the device.",
+    opxPatch: "Patch", opxOps: "Operators", opxMode: "Mode", opxPitch: "Pitch", opxEg: "EG", opxKtrk: "Key track",
+    askOk: "OK", askCancel: "Cancel",
+    opxTestsBtn: "Put the test patches in empty user presets", opxTestsHelp: "Writes the 16 opsix comparison patches (T01–T17) into empty user presets, never over a used one. Select an OPX track on the FM-1 first: its VOICE and track settings go with them.",
+    opxTestsConfirm: "Write {n} of the {m} test patches into empty user presets?", opxTestsNeedOpx: "Select an OPX track on the FM-1 first",
+    opxTestsNoRoom: "No room: no empty user preset, or 16 OPX user presets already", opxTestsProgress: "Writing the test patches", opxTestsDone: "Test patches written", opxTestsLeft: "did not fit",
+    opxEg1: "EG1 (pitch), EG2 (filter), EG3", opxLfo1: "LFO1 (operators), LFO2 (filter), LFO3",
+    opxFx: "Effects FX1–3", opxFxHelp: "In series, FX1 → FX2 → FX3. Types marked “not available” need more memory than OPX (four parts) has: OPX Solo plays them; here they are kept in the patch and pass the sound unchanged. The box holds the stored step; the value in the type's units is beside it.",
+    opxFlt: "Filter", opxFltHelp: "One per voice. An LPF 12 wide open, RESO 0, with nothing moving it (the INIT) costs nothing. KTRK slopes: 1.00 moves the cutoff one semitone per semitone.",
+    opxVp: "Virtual patch 1–12", opxVpHelp: "Destinations marked * are kept in the patch but do nothing yet (the effects and others). INT is a share of the destination's whole range (PITCH: semitones).", opxProg: "Program pitch", opxVoice: "Level and voice", opxVoiceHelp: "LEVEL: the INIT's −6.0 dB plays as before. BEND is the pitch-wheel range of the track that plays this patch. The voice settings (ASSIGN, GLIDE, UNISON) go to the track's VOICE settings when the patch is picked (GLIDE up to 1.46 s, UNISON up to 6 voices).", opxMod: "Modulation (P MOD, L MOD; INT in 0.01 semitones)",
+    opxLfoHelp: "FADE has no effect with KSYNC OFF. CTRL multiplies the INT by the chosen source (OFF: the INT as it is).",
+    opxUser: "USER algorithm", opxUserHelp: "Rows: the operator receiving; columns: the operator sending (the diagonal: self feedback). OUT: heard directly.",
+    opxAlg: "Algorithm", opxAlgFb: "ALG FB", opxNoise: "FB and WIDTH do nothing on the noise waves",
+    opxSent: "Sent to track", opxRead: "Read from track", opxLoaded: "Loaded",
+    opxBadFile: "Not an OPX patch file (337 bytes, this firmware's format)",
+    opxNeedDevice: "Connect the FM-1 to edit OPX patches and send them to a track.",
+    opxNoFw: "This firmware has no OPX. Update to OPX 0.2 or later to use it.",
     tabLead: "LEAD", leadNoEngine: "This firmware has no LEAD engine",
     ldxTitle: "Hardware patches", ldxHelp: "Convert a SysEx file of the hardware synth LEAD is modeled on (the SysEx files of its factory library) to a LEAD sound and send it to the selected track, or write the LEAD sound as a program of that hardware. Only some fields are mapped (OSC waves, OSC 2 pitch / fine, amp envelope, filter type): the rest take LEAD's defaults on import and typical values on export. Each field shows how sure its mapping is.",
     ldxImport: "Import SysEx", ldxExport: "Export SysEx", ldxApply: "Send to LEAD", ldxProg: "Program", ldxGuess: "also use the guessed fields",
@@ -3113,7 +3240,7 @@ $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; 
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
-const TABS = ["sound", "fm6", "lead", "sequencer", "tracks", "library", "samples", "projects", "settings"];
+const TABS = ["sound", "fm6", "opx", "lead", "sequencer", "tracks", "library", "samples", "projects", "settings"];
 const TAB_KEY = "felucca-editor-tab";
 const TRACK_TABS = new Set(["sound", "lead", "sequencer", "tracks"]);
 let tab = (() => {
@@ -3133,11 +3260,13 @@ function showTab(name) {
   renderPanels();
   if (name === "tracks" && prev !== "tracks" && hasTracks() && dev.dump) op(readMixer);
   if (name === "fm6" && prev !== "fm6" && dev && dev.dump && dev.info.fm6 && !fm6Listing) op(fm6Refresh);
+  if (name === "opx" && prev !== "opx" && dev && dev.dump && dev.info.opx) op(opxRefresh);
 }
 function renderPanels() {
   /* the Tracks tab only with a four-track firmware */
   const tracksOk = !dev || hasTracks() || !dev.info;
   const fm6Off = !!dev && !!dev.info && !dev.info.fm6;             /* the 6-OP FM tab: a hint without FM6 firmware */
+  const opxOff = !!dev && !!dev.info && !dev.info.opx;             /* (OPX fork) the OPX tab likewise */
   const want = tab === "tracks" && dev && dev.info && !hasTracks() ? "sound" : tab;
   for (const b of $("tabs").querySelectorAll("button[data-tab]")) {
     const on = b.dataset.tab === want;
@@ -3150,8 +3279,9 @@ function renderPanels() {
   for (const p of document.querySelectorAll(".panel")) {
     const mine = p.dataset.tab === want;
     let show = mine && (!("dev" in p.dataset) || ready);
-    if (mine && "dev" in p.dataset && !dev) hint = want === "fm6" ? "fm6NeedDevice" : "needDevice";   /* (while connecting the status line says it) */
+    if (mine && "dev" in p.dataset && !dev) hint = want === "fm6" ? "fm6NeedDevice" : want === "opx" ? "opxNeedDevice" : "needDevice";   /* (while connecting the status line says it) */
     if (show && want === "fm6" && fm6Off) { show = false; hint = "fm6NoFw"; }
+    if (show && want === "opx" && opxOff) { show = false; hint = "opxNoFw"; }
     if (show && want === "samples" && !dev.smp) { show = false; hint = "smpNone"; }
     if (show && want === "lead" && !dev.info.engines.includes("LEAD")) { show = false; hint = "leadNoEngine"; }   /* (the LEAD tab: a hint without the LEAD engine) */
     p.hidden = !show;
@@ -3161,6 +3291,7 @@ function renderPanels() {
   $("trackbar").hidden = !(ready && hasTracks() && TRACK_TABS.has(want));
   /* the FM6 slot names: listed once the tab shows with a device (also when it was already open at connect) */
   if (ready && want === "fm6" && dev.info.fm6 && !fm6List && !fm6Asked) { fm6Asked = true; op(fm6Refresh); }
+  if (ready && want === "opx" && dev.info.opx && !opxNames && !opxAsked) { opxAsked = true; op(opxRefresh); }   /* (OPX fork) */
 }
 $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
 $("tabs").addEventListener("keydown", (e) => {          /* arrow keys move between the tabs */
@@ -3268,7 +3399,11 @@ async function connect() {
   sayK("connecting");
   try {
     if (!access) {
-      if (MOCK) { mock = makeMockDevice({ legacy: QS.get("legacy") === "1" }); access = mock.access; }
+      if (MOCK) {                                  /* (OPX fork: the mock has OPX patches, unless ?legacy=1) */
+        const legacy = QS.get("legacy") === "1", X = legacy ? null : await opxLoad();
+        const fac = X && Array.from({ length: 7 }, (_, k) => { const pk = X.defaults(); X.setName(pk, `MOCK F${k + 1}`); X.put(pk, "algo", k * 5); return pk; });
+        mock = makeMockDevice({ legacy, opx: X ? { engine: 7, factory: fac } : null }); access = mock.access;
+      }
       else {
         try { access = await navigator.requestMIDIAccess({ sysex: true }); }
         catch (e) { sayK("denied"); return; }
@@ -3436,6 +3571,9 @@ function buildUI() {
   fm6Asked = false;
   fm6Picked = -1;
   renderFm6();
+  opxNames = null;
+  opxAsked = false;
+  renderOpx();
 }
 
 /* the track selector (v3): the four parts; the editor shows the selected one */
@@ -5261,7 +5399,7 @@ function bankGet(slot) {
     const u = await bank.get(rqf, dev.info, slot);
     if (!u.used) { sayK("emptySlot", slotName(slot)); return; }
     const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, pattern: u.pattern, grid: u.grid, tags: ["device"],
-      fm6: u.fm6 };
+      fm6: u.fm6, opx: u.opx };
     await libAdd([reservedFm4(dev.info.engines, u.engine) ? fromDigital(pt, dev.info.engines, dev.info.pe0) : pt]);
     sayK("copiedLib", u.name);
   });
@@ -5289,7 +5427,7 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (!x.used) continue;
     sayK("readingBank", ` ${slotName(x.slot)}`);
     const u = await bank.get(rqf, dev.info, x.slot);
-    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, pattern: u.pattern, grid: u.grid, slot: x.slot, fm6: u.fm6,
+    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, pattern: u.pattern, grid: u.grid, slot: x.slot, fm6: u.fm6, opx: u.opx,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
   download(`felucca-bank-${today()}.json`, libraryFile("bank", out, libCtx()));

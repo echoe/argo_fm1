@@ -12,7 +12,7 @@
  *    channel the selected track).
  * 4. cost: instructions per sample (kernel-counted) of the heaviest PHYS preset and of a 4-part mix with every
  *    slot of every part active, against the same with the matrix off; fails above MOD_COST_MAX.
- * 5. demos: LFO -> CUT, VEL -> AMP, MODW -> VIB, LFO -> TRIO PW, AT -> WHEEL DRV as WAVs in DEMO_DIR. */
+ * 5. demos: LFO -> CUT, VEL -> AMP, MODW -> VIB, LFO -> TRIO PW as WAVs in DEMO_DIR. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -594,30 +594,8 @@ static int demos(const char *dir)
         fclose(f);
         n++;
     }
-    /* AT -> WHEEL DRV: an organ chord, channel aftertouch pushes the drive up and down */
-    e = eng_by_name("WHEEL");
-    fresh(e, 0);
-    slot(t, 0, MS_AT, MD_E1 + (int32_t)edit_by_label(e, "DRV", 6), 63);
-    slot(t, 1, MS_AT, MD_CUT, 20);
-    if ((f = demo_open(dir, "at_wheel_drv", 6u * FS / CTL * CTL))) {
-        trk_note_on(t, 48, 100);
-        trk_note_on(t, 55, 100);
-        trk_note_on(t, 64, 100);
-        for (k = 0; k < 5u * FS / CTL; k++) {
-            uint32_t ph = k * 254u / (5u * FS / CTL);
-            if (k % 16u == 0u)
-                pkt(0xD0, ph < 127u ? ph : 254u - ph, 0);
-            demo_blocks(f, 1);
-        }
-        trk_note_off(t, 48);
-        trk_note_off(t, 55);
-        trk_note_off(t, 64);
-        demo_blocks(f, FS / CTL);
-        fclose(f);
-        n++;
-    }
-    printf("mod: %u demos in %s (lfo_cut, vel_amp, modw_vib, lfo_trio_pw, at_wheel_drv)\n", n, dir);
-    return n == 5u;
+    printf("mod: %u demos in %s (lfo_cut, vel_amp, modw_vib, lfo_trio_pw)\n", n, dir);
+    return n == 4u;
 }
 
 int main(int argc, char **argv)

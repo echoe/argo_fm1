@@ -160,13 +160,13 @@ static int test_timing(void)
         bad += check("  let go: the live signal again after the ramp, bit for bit", same(20000 + 160, 40000));
         bad += check("  the buffer given back, nothing left running", !sl_lent && pf.mode == BM_NONE && !pf.busy);
     }
-    {   /* REVERSE: the next 1/8 recorded, then played backwards */
+    {   /* REVERSE: the next 1/8 recorded, then played backwards (at 180 BPM: the loop, halved for the Argo OPX build, holds a 1/8 from 162) */
         ev_t ev[] = {{992, PF_REV + 1}, {40000, -(PF_REV + 1)}};
         int32_t el, er;
-        run(120, 1, ev, 2, 50000);
-        rev_a = P16;
-        rev_len = 11025;
-        rev_t0 = P16 + rev_len;
+        run(180, 1, ev, 2, 50000);
+        rev_a = 3675;                                  /* a 1/16 at 180 BPM */
+        rev_len = 7350;
+        rev_t0 = rev_a + rev_len;
         el = err_vs(rev_t0 + 160, rev_t0 + rev_len - 160, reversed, 0);
         er = err_vs(rev_t0 + 160, rev_t0 + rev_len - 160, reversed, 1);
         bad += check("REVERSE: live until the 1/16 after the press + a 1/8 (exact)", same(0, rev_t0));
@@ -248,16 +248,19 @@ static int test_too_long(void)
     ev_t ev[] = {{992, PF_R8 + 1}, {40000, -(PF_R8 + 1)}};
     test_signal(440, 12000, 277, 9000);
     run(72, 1, ev, 2, 50000);
-    bad += check("REPEAT 1/8 at 72 BPM (417 ms, the loop holds 371): nothing happens, bit for bit",
+    bad += check("REPEAT 1/8 at 72 BPM (417 ms, the loop holds 186): nothing happens, bit for bit",
                  same(0, 50000) && !busy_seen && !sl_lent && !(perf_avail() & PF_BIT(PF_R8)));
     run(120, 1, ev, 2, 50000);
-    bad += check("REPEAT 1/8 at 120 BPM (250 ms): it plays", !same(0, 40000) && (perf_avail() & PF_BIT(PF_R8)));
-    song.g[G_BPM] = 81;
-    bad += check("  REPEAT 1/8 and REVERSE (1/8) fit from 81 BPM, 1/16 from 41",
+    bad += check("REPEAT 1/8 at 120 BPM (250 ms, the loop holds 186 since the Argo OPX build): nothing happens, bit for bit",
+                 same(0, 50000) && !busy_seen && !(perf_avail() & PF_BIT(PF_R8)));
+    run(180, 1, ev, 2, 50000);
+    bad += check("REPEAT 1/8 at 180 BPM (167 ms): it plays", !same(0, 40000) && (perf_avail() & PF_BIT(PF_R8)));
+    song.g[G_BPM] = 162;
+    bad += check("  REPEAT 1/8 and REVERSE (1/8) fit from 162 BPM, 1/16 from 81",
                  (perf_avail() & PF_BIT(PF_R8) && perf_avail() & PF_BIT(PF_REV)) &&
-                 (song.g[G_BPM] = 80, !(perf_avail() & PF_BIT(PF_R8)) && !(perf_avail() & PF_BIT(PF_REV))) &&
-                 (song.g[G_BPM] = 41, perf_avail() & PF_BIT(PF_R16)) &&
-                 (song.g[G_BPM] = 40, !(perf_avail() & PF_BIT(PF_R16))));
+                 (song.g[G_BPM] = 161, !(perf_avail() & PF_BIT(PF_R8)) && !(perf_avail() & PF_BIT(PF_REV))) &&
+                 (song.g[G_BPM] = 81, perf_avail() & PF_BIT(PF_R16)) &&
+                 (song.g[G_BPM] = 80, !(perf_avail() & PF_BIT(PF_R16))));
     {   /* a REPEAT held while the tempo slows past its fit stops cleanly */
         uint32_t t;
         int32_t mx = 0;
@@ -1647,14 +1650,14 @@ static int test_djloop(void)
 {
     int bad = 0, ok;
     char what[200];
-    const uint32_t T0 = 992, L = 4096;                 /* the press (a block start); LENGTH 50 = 4096 samples (93 ms) */
+    const uint32_t T0 = 992, L = 2048;                 /* the press (a block start); LENGTH 50 = 2048 samples (46 ms; 4096 before the loop was halved) */
     ev_t ev[] = {{T0, PF_LOOP + 1}, {60000, -(PF_LOOP + 1)}};
     test_signal(440, 12000, 277, 9000);
-    ok = perf_dj_len(0) == 16384 && perf_dj_len(100) == 1024 && perf_dj_len(50) == L && perf_dj_len(25) == 8192 &&
-         perf_dj_len(75) == 2048 && perf_dj_len(10) > perf_dj_len(11) && !(perf_dj_len(37) & 1u) &&
+    ok = perf_dj_len(0) == 8192 && perf_dj_len(100) == 512 && perf_dj_len(50) == L && perf_dj_len(25) == 4096 &&
+         perf_dj_len(75) == 1024 && perf_dj_len(10) > perf_dj_len(11) && !(perf_dj_len(37) & 1u) &&
          perf_dj_speed(0) == 65536 && perf_dj_speed(-50) == 0 && perf_dj_speed(-100) == -65536 &&
          perf_dj_speed(100) == 131072 && perf_dj_speed(-25) == 32768;
-    bad += check("DJ LOOP: KNOB 3 -> length 371 .. 23 ms (halved a quarter turn), KNOB 1 -> speed -1x .. 1x .. 2x, 0 at -50", ok);
+    bad += check("DJ LOOP: KNOB 3 -> length 186 .. 12 ms (halved a quarter turn), KNOB 1 -> speed -1x .. 1x .. 2x, 0 at -50", ok);
     {   /* 1x: records LENGTH live, then loops it */
         int32_t el, er, el2;
         run_dj(0, 50, NULL, 0, ev, 2, 100000);

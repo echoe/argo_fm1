@@ -9,6 +9,13 @@
  * and layer cells, graph annotations, document text; L (28 px) the one big readout of a screen. Where M cannot fit
  * (a card value with its unit wider than the card, a dialog question or a header message too long) it is set in S;
  * free text (names) is ellipsised at its size. */
+/* (OPX fork) Felucca's FLT and SHP routes (ENV / LFO DEST, the matrix's CUT and SHP) do nothing on an OPX track: their
+ * cards DIM (eng_opx.c OPX_FELUCCA_MACROS) */
+#if FELUCCA_OPX
+static int opx_route_off(const track_t *t) { return !OPX_FELUCCA_MACROS && t->eng_req % NENGINES == ENGI_OPX; }
+#else
+static int opx_route_off(const track_t *t) { (void)t; return 0; }
+#endif
 static void draw_menu(void);
 static int name_on(void);                              /* NAME (ui_name.c) */
 static sset_t lock_held(void);                       /* parameter locks: the steps held on STEP (ui_input.c) */
@@ -1302,17 +1309,29 @@ static void draw_columns(void)
         return;
     }
 #endif
+#if FELUCCA_OPX
+    if (xmat_on()) {                                     /* OPX's EDIT 1 on USER: ALG, ROW, COL, the amount (ui_fm6op.c) */
+        for (c = 0; c < 4u; c++) {
+            const char *lb, *u;
+            int32_t r;
+            uint32_t ic;
+            xmat_card(c, &lb, val, &u, &r, &ic);
+            draw_column(c, lb, val, u, VAL(c), r, ic);
+        }
+        return;
+    }
+#endif
     if (fop_page(cur_page()->graph)) {                   /* FM6: OP, then three of its bytes (ui_fm6op.c) */
         for (c = 0; c < 4u; c++) {
             const char *lb, *u;
             int32_t r;
             uint32_t ic;
             int on;
-            if (!fop_ok()) {                             /* (the engine changed before ui_draw left the page) */
+            if (!fop_any_ok()) {                         /* (the engine changed before ui_draw left the page) */
                 draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
                 continue;
             }
-            on = fop_card(c, &lb, val, &u, &r, &ic);
+            on = fop_any_card(c, &lb, val, &u, &r, &ic);
             if (fop_field(c) != FO_OP && fop_field(c) != FO_STG)   /* (OP, STAGE: 1..6, 1..4) */
                 card_span_by(span_fop, 0, 0, (int32_t)fm6_max(fop_byte(fop_field(c))), (int32_t)c);
             draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, ic);
@@ -1328,7 +1347,8 @@ static void draw_columns(void)
         card_span_by(span_names, N_MSRC, 0, MS_N - 1, 0);
         draw_column(1, "SRC", N_MSRC[clamp(s, 0, MS_N - 1)], "", s ? VAL(1u) : T_DIM, -1, mod_src_icon(s));
         card_span_by(span_mod_dst, t, 0, MD_N - 1, 0);
-        draw_column(2, "DST", mod_dst_name(t, d), "", d ? VAL(2u) : T_DIM, -1, mod_dst_icon(t, d));
+        draw_column(2, "DST", mod_dst_name(t, d), "", d && !(opx_route_off(t) && (d == MD_CUT || d == MD_SHP)) ? VAL(2u) :
+                    T_DIM, -1, mod_dst_icon(t, d));   /* (OPX fork: CUT and SHP do nothing on OPX, DIM) */
         param_format(&TP[id + 2u], a, val, &unit);
         card_span_of(&TP[id + 2u]);
         draw_column(3, "AMT", val, unit, a ? VAL(3u) : T_DIM, RATIO(&TP[id + 2u], a), mod_src_icon(MS_OFF));
@@ -1487,6 +1507,11 @@ static void draw_columns(void)
             continue;
         }
         if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
+            draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), param_icon(d, *vp));
+            continue;
+        }
+        if (opx_route_off(TSEL) &&                      /* OPX: Felucca's FLT and SHP routes do nothing, DIM */
+            (vp == &TSEL->p[P_ED_FLT] || vp == &TSEL->p[P_ED_SHP] || vp == &TSEL->p[P_LD_FLT] || vp == &TSEL->p[P_LD_SHP])) {
             draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), param_icon(d, *vp));
             continue;
         }
@@ -1815,7 +1840,8 @@ static void ui_draw_page(uint32_t counting)
     }
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
                                                          * FELUCCA_FM4: any track): EDIT 1 */
-        ui.page = (uint8_t)page_first(FAM_EDIT);
+        ui.page = (uint8_t)page_first(PAGES[ui.page].fam == FAM_TRK ? FAM_TRK : FAM_EDIT);   /* (OPX fork: HOME's OP
+                                                         * MIX of a track that is not OPX any more: the MIXER) */
         page_entered();
     }
     cursor_fix();

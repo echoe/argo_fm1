@@ -18,6 +18,7 @@ static uint32_t cat_of_engine(uint32_t e) { return e == 10u || e == 13u || e == 
  * L LEAD, P PAD, U PLUCK, K KEYS, D DRUM, F FX, O OTHER); a preset past its string (DIGITAL's, FELUCCA_FM4 builds
  * only; SAMPLE's retired PERC, past SMP_NPRESETS): its engine's (cat_of_engine). tests/ui_test.c checks every string
  * against its engine's preset count. A preset's category is a hint for browsing: nothing else reads it */
+#include "opx_factory_cat.h"
 #include "presets_cat.h"                 /* PCAT_<ENGINE>: the categories of the presets tools/gen_presets.py added ("" = none) */
 #if FELUCCA_SHDRUM
 #define PCAT_DRUM_SH "DDD"                       /* (the SH kits: SHDRUM builds only) */
@@ -33,7 +34,11 @@ static const char *const PRESET_CAT[18] = {
     "KKLL",                      /* 4 SAMPLE: PIANO, (PIANO: the retired TRANH's alias), FLUTE, SAX */
     "PLBF",                      /* 5 VOICE: CHOIR AAH, VOX LEAD, WOW BASS, WHISPER */
     "BLLUP",                     /* 6 TRIO: FAT BASS, ARP LEAD, SYNC LEAD, RING BELL, CHIP CHOIR */
-    "KKKKK",                     /* 7 WHEEL: the organs */
+#if FELUCCA_OPX
+    OPX_CAT,                     /* 7 OPX (was WHEEL): opx_factory_cat.h, generated with the patches (tools/opx_factory.py) */
+#else
+    "",                          /* 7 (WHEEL, retired) */
+#endif
     "PFPP",                      /* 8 GRAIN: CLOUD PAD, GLITCH, FROZEN, SHIMMER */
     "UUUPUDDPU",                 /* 9 PHYS: BELL TREE, MARIMBA, PLUCK, BOWED METAL, KALIMBA, HAND DRUM, TOMS, DRONE
                                   * STRING, HARP */

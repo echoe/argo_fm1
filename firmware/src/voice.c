@@ -337,12 +337,27 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
 static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int glide)
 {
     uint32_t mode = (uint32_t)t->p[P_VOICE], nv = mode == V_UNISON ? trk_nvoice(t) : 1u, i;
+#if FELUCCA_OPX
+    int32_t ocent = -1;                                 /* (OPX fork, M6: OPX's UNISON: the patch's voices (2..8, at
+                                                         * most the engine's six), DETUNE 0..127 = 0..200 cents from the
+                                                         * lowest voice to the highest, the opsix's range) */
+    if (nv > 1u && t->engine == ENGI_OPX) {
+        const opx_patch_t *op = opx_patch_now((uint32_t)(t - trk));
+        if (op->unison && op->unison + 1u < nv)
+            nv = op->unison + 1u;
+        ocent = t->p[P_DETUNE] * 200 / 127;
+    }
+#endif
     for (i = 0; i < nv; i++) {
         voice_t *v = &t->v[i];
         int32_t k = 2 * (int32_t)i - (int32_t)(nv - 1u);   /* -7 .. 7 */
         if (nv > 1u && nv < NVOICE)
             k = k * (NVOICE - 1) / (int32_t)(nv - 1u);      /* fewer voices: the outer ones as wide */
         v->fine = nv > 1u ? k * t->p[P_DETUNE] * 56 / 889 : 0;   /* up to ~±40 cents */
+#if FELUCCA_OPX
+        if (ocent >= 0)                                 /* (a cent: 2.3657 of fine's 1/4096 steps) */
+            v->fine = (2 * (int32_t)i - (int32_t)(nv - 1u)) * ocent * 23657 / (20000 * (int32_t)(nv - 1u));
+#endif
         if (retrig || !v->active || !v->gate) {
             if ((!v->active || v->stage == 4u) && !voice_room(t, i > 0))
                 continue;                                   /* no room for this extra UNISON voice */
@@ -619,6 +634,8 @@ static int32_t env_tick(track_t *t, voice_t *v)
  * voice. A buffer per part (the two cores render parts at once, fx.c mix_block) */
 #if FELUCCA_CPU2
 #define T_SPREAD(t) ((t)->spread_on)
+static uint8_t spread_wide_a[NTRK];                     /* OPX: the part's effects made two channels: spread_buf the left one, full width (fx.c mix_spread); a part a flag, the two cores */
+#define T_WIDE(t) spread_wide_a[(t) - trk]
 static int32_t spread_buf[NTRK][CTL];
 #define SPREAD_BUF(t) spread_buf[C1_PI(t)]
 #define SPREAD_CLEAR(t) spread_clear(SPREAD_BUF(t))
@@ -636,8 +653,9 @@ static __attribute__((noinline)) void spread_sum(int32_t *out, const int32_t *sb
         out[i] += sb[i];
 }
 #else                                                   /* one core: one flag and one buffer, as up to 1.6 */
-static uint8_t spread_on;
+static uint8_t spread_on, spread_wide;
 #define T_SPREAD(t) spread_on
+#define T_WIDE(t) spread_wide
 static int32_t spread_buf[CTL];
 #define SPREAD_BUF(t) spread_buf
 #define SPREAD_CLEAR(t) spread_clear()
@@ -756,6 +774,15 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     }
     if (T_SPREAD(t))
         SPREAD_SUM(out, t);                /* out: every voice; spread_buf: the left ones */
+    if (e->post_wide) {                                 /* OPX: the engine's effects over the part; they may make two channels */
+        uint32_t f = e->post_wide(t, out, SPREAD_BUF(t), n, T_SPREAD(t), nr);
+        if (f & 2u) {
+            T_SPREAD(t) = 1;
+            T_WIDE(t) = 1;                              /* (two channels made: spread_buf the left, at full width: fx.c mix_spread) */
+        }
+        if ((f & 1u) && !nr)
+            nr = 1;                                     /* (its tail: mixed on) */
+    }
     if (e->post)                                        /* the engine's own effect over the part (ADPCM: its echo) */
         nr += e->post(t, out, n);
     if (fade) {

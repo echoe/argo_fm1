@@ -9,7 +9,7 @@
  * keep it in one region per part instead of an array each. The region holds the state of the engine that
  * last claimed it (eng_mem_owner); a switch to another such engine zeroes its engine_t.mem bytes, which is
  * the state each had at power-on, so a switch sounds as it did with the arrays (tests/union_test.c). State
- * that runs on across notes and switches stays outside (WHEEL's wheels, GRAIN's random numbers).
+ * that runs on across notes and switches stays outside (GRAIN's random numbers; WHEEL's wheels, until OPX replaced it).
  * Sized by the largest, ADPCM when it is built (else PHYS, 3 x SYMP's slot); an engine that needs more than ENG_MEM_PART grows it for
  * every part (x NPART of the pool). Zero-initialised pool section: main.c fm1_cstart clears it. */
 #if FELUCCA_ADPCM
@@ -25,7 +25,7 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #define ENG_MEM(p) ((void *)eng_mem[p].b)  /* part p's region (p < NPART) */
 #define ENG_MEM_FITS(name, size) _Static_assert((size) <= ENG_MEM_PART, name " state over ENG_MEM_PART")
 
-#include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL (NOISE is replaced by SYN1) */
+#include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO (WHEEL is replaced by OPX, NOISE by LEAD) */
 #include "../engines/src/eng_phase.c"   /* Felucca-Engines (MIT): PHASE */
 #include "../engines/src/eng_lofi.c"
 #if FELUCCA_SAMPLE
@@ -35,7 +35,6 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #endif
 #include "eng_formant.c"
 #include "../engines/src/eng_trio.c"
-#include "../engines/src/eng_wheel.c"
 #if FELUCCA_GRAIN
 #include "eng_grain.c"
 #endif
@@ -71,6 +70,9 @@ static void wvt_track_loaded(track_t *t) { (void)t; }
 #else
 static void fmt_track_loaded(track_t *t) { (void)t; }
 #endif
+#if FELUCCA_OPX
+#include "eng_opx.c"            /* OPX: altered four-operator FM after the Korg opsix (opx_*.c; its patches live in the sequence banks' sixth objects) */
+#endif
 
 /* the editor protocol, user presets and projects store these indices: append, never reorder */
 static const engine_t *const ENGINES[NENGINES] = {
@@ -89,7 +91,11 @@ static const engine_t *const ENGINES[NENGINES] = {
 #endif
     &ENG_FORMANT,                /* 5 VOICE (eng_formant.c: "voice" is a sounding note in voice.c) */
     &ENG_TRIO,                   /* 6 */
-    &ENG_WHEEL,                  /* 7 */
+#if FELUCCA_OPX
+    &ENG_OPX,                    /* 7 (ENGI_OPX; was WHEEL; FELUCCA_OPX=0 builds without it) */
+#else
+    &ENG_FM4_GONE,               /* 7: retired (WHEEL, replaced by OPX) */
+#endif
 #if FELUCCA_GRAIN
     &ENG_GRAIN,                  /* 8 */
 #else
@@ -190,7 +196,10 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 #if FELUCCA_SAMPLE
     4,                           /* SAMPLE */
 #endif
-    5, 6, 7,                     /* VOICE TRIO WHEEL */
+    5, 6,                        /* VOICE TRIO */
+#if FELUCCA_OPX
+    ENGI_OPX,                    /* OPX (WHEEL's place) */
+#endif
 #if FELUCCA_GRAIN
     8,                           /* GRAIN */
 #endif

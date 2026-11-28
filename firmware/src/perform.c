@@ -13,7 +13,7 @@
  * (THR_SLOPE). Let go, the sends are the tracks' own again and what the buses hold rings out. The buses are the song's
  * (no RAM of their own); the tracks' REV / DLY / FDBK values are never touched (nothing saved, nothing recorded).
  * DJ LOOP (Argo 1.8.5, after the SP-404's DJFX LOOPER; F5 by default): holding the key records the live mix for LENGTH
- * (KNOB 3 while it plays: 371 ms at its right end, 23 ms at its left, read when the key goes down), then loops what it caught; let go, the live
+ * (KNOB 3 while it plays: 186 ms at its right end, 12 ms at its left, read when the key goes down), then loops what it caught; let go, the live
  * mix is back. While it plays KNOB 1 is its SPEED (not FILTER: turned left of the middle from normal through stopped
  * to backwards, right of it up to double: a record under the hand, the pitch following) and KNOB 3 its LENGTH, live
  * (not THROW; the loop can only get shorter than what was caught), DEPTH (KNOB 4) stays the level. The two keep their
@@ -46,8 +46,8 @@
  * last stage's output fed back (0.4) into the first; out (x + all-passed) / 2 * 0.9: two notches moving, the peaks
  * +1.6 dB, white noise -1 .. -3.5 dB. KNOB 4 DEPTH is the FLANGER's and the PHASER's level too (OCT UP /
  * DN playing: full, KNOB 4 its shimmer).
- * The buffer: the SLICER's recordings (sl_buf, 32 KB) borrowed as one stereo loop of 8192 frames at 22.05 kHz
- * (371 ms). While borrowed, STUT tracks play live; their recordings are dropped afterwards. A REPEAT 1/8 or
+ * The buffer: the SLICER's recordings (sl_buf, 16 KB) borrowed as one stereo loop of 4096 frames at 22.05 kHz
+ * (186 ms). While borrowed, STUT tracks play live; their recordings are dropped afterwards. A REPEAT 1/8 or
  * REVERSE longer than the loop at the tempo (below 81 BPM) does nothing (the map shows it dimmed).
  * KNOB 1..4 with FX: the macros FILTER (the LPF / HPF), CRUSH, THROW (the dry mix into the delay and reverb
  * sends), DEPTH (the buffer effects' level, FLANGER's and PHASER's; OCT UP / DN: the shimmer).
@@ -72,12 +72,12 @@ enum { PF_R8, PF_R16, PF_R32, PF_REV, PF_LPF, PF_HPF, PF_TAPE, PF_FRZ, PF_OUP, P
 #define PF_BUF (PF_REPEAT | PF_BIT(PF_REV) | PF_BIT(PF_TAPE) | PF_BIT(PF_FRZ) | PF_HARM | PF_BIT(PF_LOOP))
 #define PF_MUTE (((1u << NTRK) - 1u) << PF_M1)
 #define PF_MOD (PF_BIT(PF_FLG) | PF_BIT(PF_PHS))   /* FLANGER, PHASER: their own stages after CRUSH */
-#define PB_FRAMES (NTRK * SL_LEN / 2u)        /* stereo frames in sl_buf: 8192, 371 ms at 22.05 kHz */
+#define PB_FRAMES (NTRK * SL_LEN / 2u)        /* stereo frames in sl_buf: 4096, 186 ms at 22.05 kHz (Argo: 8192 before SL_LEN was halved) */
 #define PB_MAX (2u * PB_FRAMES)               /* the longest loop, 44.1 kHz samples */
 #define PB_TAPE 32000u                        /* TAPE STOP takes 1 beat, at most this (it lags a quarter of it) */
-#define PB_FREC 4096u                         /* FREEZE: frames it records (186 ms) */
+#define PB_FREC 4096u                         /* FREEZE: frames it records (186 ms: all of the loop since SL_LEN was halved) */
 #define PB_GRAIN 2048u                        /* .. its two overlapping grains, samples (46 ms) */
-#define HB_MASK 4095u                         /* OCT UP / DN: the delay's frames (of the loop's 8192) */
+#define HB_MASK 4095u                         /* OCT UP / DN: the delay's frames (all of the loop's 4096) */
 #define HB_BASE 128u                          /* .. the taps' shortest delay, samples; the sweep: 2048 */
 #define HB_FB 269                             /* .. KNOB 4 (0 .. 100) -> the shimmer, Q15: 0 .. 0.82 */
 #define PF_TOP (63 << 8)                      /* filter cutoff index, Q8 (PF_SVF): the LPF's open end */
@@ -249,8 +249,8 @@ static uint32_t perf_pick(uint32_t a)
 /* DJ LOOP is the buffer effect playing: KNOB 1 is its SPEED, KNOB 3 its LENGTH (the UI: perf_dj_k, not perf_k) */
 static int perf_dj_on(void) { return perf_pick(perf_act) == PF_LOOP; }
 
-/* DJ LOOP: the LENGTH knob's distance from its right end (0 .. 100: KNOB 3 is -100 .. 0) -> the loop's length in samples: 16384 (371 ms) at 0, halved each quarter of the knob, 1024
- * (23 ms) at 100, straight between (even: the buffer holds frame pairs) */
+/* DJ LOOP: the LENGTH knob's distance from its right end (0 .. 100: KNOB 3 is -100 .. 0) -> the loop's length in samples: 8192 (186 ms) at 0, halved each quarter of the knob, 512
+ * (12 ms) at 100, straight between (even: the buffer holds frame pairs) */
 static uint32_t perf_dj_len(int32_t k)
 {
     uint32_t v = (uint32_t)clamp(k, 0, 100) * 4u, b = PB_MAX >> (v / 100u);

@@ -164,6 +164,10 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
      * own over the whole part (an echo, a resonator), also with no voice sounding; returns 1 while it still sounds
      * (the host keeps mixing the part), 0 = silent */
     uint32_t (*post)(struct track *t, int32_t *out, uint32_t n);
+    /* optional (OPX): after the voices, the part's block (out; with SPREAD, sp != 0, left the left voices' of it) through the
+     * engine's effects; nr the voices rendered. Returns bit 0: it still sounds (a tail: the part is mixed with no voice), bit 1:
+     * it made two channels (left the left one, out both: mixed at full width). Used as well as post, after it */
+    uint32_t (*post_wide)(struct track *t, int32_t *out, int32_t *left, uint32_t n, uint32_t sp, uint32_t nr);
 } engine_t;
 
 #endif /* FELUCCA_ENGINE_H */

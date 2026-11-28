@@ -15,10 +15,15 @@
 enum { MC_TEXT, MC_TITLE, MC_URL };
 typedef struct { const char *text; uint8_t kind; } menu_credit_t;
 static const menu_credit_t MENU_CREDITS[] = {
+    {"OPX", MC_TITLE},             /* (OPX fork) the fork: the OPX engine, its pages and storage */
+    {"Tom Marsden", MC_TEXT},
+    {"A fork of Felucca with an altered-FM engine after the Korg opsix. Not affiliated with Korg or H\xFCgelton.", MC_TEXT},
+    {"https://github.com/thomasgregorymarsden-code/Felucca-opx", MC_URL},
+    {"", MC_TEXT},
     {"H\xFCgelton Instruments", MC_TITLE},  /* Felucca's own: above; these are ours too */
     {"Leo Kuroshita", MC_TEXT},
     {"The DRUM engine: GPL-3.0", MC_TEXT},
-    {"Felucca-Engines (ANALOG LOFI TRIO WHEEL PHASE): MIT", MC_TEXT},
+    {"Felucca-Engines (ANALOG LOFI TRIO PHASE): MIT", MC_TEXT},
     {"LEAD: after Synth2 (MIT)", MC_TEXT},
     {"Fukiai icon font: MIT", MC_TEXT},
     {"https://github.com/hugelton", MC_URL},

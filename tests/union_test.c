@@ -4,7 +4,7 @@
  *   build/host/union_test [GOLDEN_FILE]      (run_tests.sh builds and runs it against tests/union_golden.txt)
  *
  * Every pair (and A -> B -> A) of the engines that keep state per part (GRAIN, PHYS, DRUM, FM6, SLICE), with
- * ANALOG, SAMPLE and WHEEL (state outside the region) among them, on part 1 while part 3 plays other engines
+ * ANALOG, SAMPLE and OPX (WHEEL until OPX took its slot) among them, on part 1 while part 3 plays other engines
  * alongside, at three presets: a chord and a low note held, released, still ringing at the next switch (the
  * fade on the old engine), and once more with the next notes inside the fade (they wait for the switch).
  * Each sequence runs in its own fork()ed child from boot state; its mix is one 64-bit FNV-1a hash. The file
@@ -55,7 +55,7 @@ static void uplay(track_t *t, uint32_t e, uint32_t pi, uint32_t base, uint32_t w
     urun(250);                                   /* still ringing at the next switch */
 }
 
-static const uint32_t UE[] = {0 /* ANALOG */, ENGI_SAMPLE, 7 /* WHEEL */, 8 /* GRAIN */, ENGI_PHYS, ENGI_DRUM, ENGI_FM6,
+static const uint32_t UE[] = {0 /* ANALOG */, ENGI_SAMPLE, ENGI_OPX /* 7, was WHEEL */, 8 /* GRAIN */, ENGI_PHYS, ENGI_DRUM, ENGI_FM6,
 #if FELUCCA_SLICE
                               13 /* SLICE */
 #endif

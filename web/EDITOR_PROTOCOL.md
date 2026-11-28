@@ -97,7 +97,7 @@ watches (v2, `WATCH`), the device also sends push frames (cmds 23, 24, 26) at an
 | string | ASCII bytes, ended by a 0 byte |
 | scope | 0 = parameter of the selected track (`P_*`, 0..P_COUNT−1); 1 = global parameter (`G_*`, 0..G_COUNT−1) |
 | track | 0..3: tracks 1..4 (synth parts) |
-| engine byte | 0..NENGINES−1 (firmware before 1.0: NENGINES = its drum track, no engine). The numbers are fixed, new engines are appended: 0 ANALOG, 1 reserved (DIGITAL before 1.0: see below), 2 PHASE, 3 LOFI, 4 SAMPLE, 5 VOICE, 6 TRIO, 7 WHEEL, 8 GRAIN, 9 PHYS, 10 DRUM, 11 LEAD (NOISE before Argo 1.9; the slot is the same), 12 FM6, 13 SLICE (NENGINES 14; a build with `FELUCCA_SLICE=0` has 13). The device and the editor list them in another order (ANALOG FM6 PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS LEAD SLICE DRUM: `ENGINE_ORDER`); the numbers stay |
+| engine byte | 0..NENGINES−1 (firmware before 1.0: NENGINES = its drum track, no engine). The numbers are fixed, new engines are appended: 0 ANALOG, 1 reserved (DIGITAL before 1.0: see below), 2 PHASE, 3 LOFI, 4 SAMPLE, 5 VOICE, 6 TRIO, 7 OPX (WHEEL before Argo 1.8.7; the slot is the same, a stored WHEEL sound loads as OPX), 8 GRAIN, 9 PHYS, 10 DRUM, 11 LEAD (NOISE before Argo 1.9; the slot is the same), 12 FM6, 13 SLICE (NENGINES 14; a build with `FELUCCA_SLICE=0` has 13). The device and the editor list them in another order (ANALOG FM6 PHASE LOFI SAMPLE VOICE TRIO OPX GRAIN PHYS LEAD SLICE DRUM: `ENGINE_ORDER`); the numbers stay |
 
 The engine parameters are `P_E0..P_E7`: P_COUNT−8 .. P_COUNT−1 (106..113 since 1.8; 103..110 in 1.5 .. 1.7; 96..103 in 1.2 .. 1.4; 91..98 in
 1.1), and `INFO` gives `P_E0`.
@@ -206,7 +206,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 | 12 SMP_WRITE | slot, offset (3 × 7 bit, LSB first), pack7 data (≤ 256 bytes) | slot, offset, rc: 0 ok, 1 arguments, 2 erase, 3 write, 4 slot in use (send SMP_BEGIN first). Offset ≥ 512 and a multiple of 256; writes go in increasing order (a write at a 4 KiB boundary erases that sector) |
 | 13 SMP_END | slot, pack7 header (480 bytes) | slot, rc: 0 ok, 1 size, 2 header, 3 data CRC, 4 flash, 5 zones |
 | 14 SMP_ERASE | slot | slot, rc (erases the whole slot, ~1 s) |
-| 15 SMP_INFO | — | slots, slot KiB, then per slot: zone count (0 = empty), name string, data KiB |
+| 15 SMP_INFO | — | slots, slot KiB, then per slot: zone count (0 = empty), name string, data KiB; OPX fork: then per slot its own size in KiB (slot 3: 40, the rest holds the OPX data; a reply without them: every slot is slot KiB) |
 | 16 UP_LIST | start, count (1..16) | start, count, total slots, then per slot: used (0/1), engine, name string ("" if unused); 1.2: then one category byte per slot listed (below; 0 if unused) |
 | 17 UP_GET | slot | slot, used, engine, name, P_COUNT × v14, 16 × (note, flags), then (v5) kind (0 a note pattern, 1 a drum grid) and for kind 1 16 × hi; 1.2: then the category |
 | 18 UP_PUT | slot, engine, name, P_COUNT × v14, 16 × (note, flags) [, kind 0 or 1, 16 × hi (v5) [, category (1.2)]] | slot, rc (0 ok, 1 args, 2 flash). Writes flash: allow 1 s |
@@ -733,9 +733,9 @@ Five track parameters before the engine parameters, ahead of 1.5's TYPE and ESYN
 | id | label | values |
 | --- | --- | --- |
 | 96 | INSRT | enum (append-only): 0 OFF, 1 SOFT, 2 HARD, 3 FOLD, 4 FUZZ, 5 CRUSH, 6 PHASR, 7 FLANG, 8 CHOR, 9 GRAIN, 10 TAPE (Argo 1.7.0); default OFF |
-| 97 | INS A | 0..127, default 64: SOFT .. FUZZ DRIVE (PCT), CRUSH BITS (1 + v / 8: 1..16), PHASR / FLANG / CHOR RATE (LFOHZ), GRAIN SIZE (v / 8 picks 5 6 7 9 11 13 16 20 24 29 35 43 52 63 76 93 ms), TAPE DRIVE (PCT: tanh saturation 1x .. 3x, the level made up) |
+| 97 | INS A | 0..127, default 64: SOFT .. FUZZ DRIVE (PCT), CRUSH BITS (1 + v / 8: 1..16), PHASR / FLANG / CHOR RATE (LFOHZ), GRAIN SIZE (v / 8 picks 2.5 3 3.7 4.5 5.4 6.6 8 9.8 12 14 18 21 26 31 38 46 ms: Argo; Felucca 5 .. 93 ms), TAPE DRIVE (PCT: tanh saturation 1x .. 3x, the level made up) |
 | 98 | INS B | 0..127, default 96: SOFT .. FUZZ TONE (CUTOFF), CRUSH RATE (v / 8 picks 689 919 1.1k 1.4k 1.8k 2.2k 2.8k 3.7k 4.4k 5.5k 7.4k 8.8k 11k 15k 22k 44k Hz), the swept ones DEPTH (PCT), GRAIN PITCH (v * 25 / 128 picks -12 .. +12 semitones; 64 is 0), TAPE WOW (PCT: the pitch wander of a worn tape, up to ~35 cents) |
-| 99 | INS C | 0..127, default 96: SOFT .. FUZZ LEVEL (DB, as LVL: 112 = 0 dB), CRUSH LPF (CUTOFF), the swept ones FDBK (PCT), GRAIN SPRAY (PCT: how far back in the last 186 ms a grain may start; 0 the newest sound), TAPE TONE (CUTOFF: the two low-passes) |
+| 99 | INS C | 0..127, default 96: SOFT .. FUZZ LEVEL (DB, as LVL: 112 = 0 dB), CRUSH LPF (CUTOFF), the swept ones FDBK (PCT), GRAIN SPRAY (PCT: how far back in the last 93 ms a grain may start; 0 the newest sound), TAPE TONE (CUTOFF: the two low-passes) |
 | 100 | MIX | 0..127 (PCT), default 127: dry / wet; 0 = the dry track, bit for bit |
 
 The SLICER's `SLCR` (45) has three modes since the Argo 1.7.0 build, 0 OFF, 1 GATE, 2 STUT: its former 3, GRAIN, is the
@@ -825,10 +825,13 @@ this firmware sends 3. Requests name objects, never flash addresses.
 | 6, 7 | user preset banks (slots 1..16, 17..32) | the bank's size, or 0 if empty |
 | 8 | the FM6 patch bank of 1.0..1.0.2 (B1..B27). Since 1.0.3 always listed empty (see below) | 3472, or 0 if empty |
 | 9 | the user presets' FM6 patches (1.0.3; `up_fm6.c`: per slot a tag and the packed patch) | 3728, or 0 if none |
+| 10, 11 | OPX fork (0.2): the projects' OPX patches, projects 1-2 and 3-4 (`opx_store.c` `opx_pair_t`), as stored | 3496, or 0 if none |
+| 12, 13 | OPX fork (0.2): the OPX user presets' patches, 8 each (`upx_obj_t`), as stored | 3560, or 0 if none |
+| 14 | OPX fork (0.2): the four tracks' OPX patches now (337 bytes each); restored after id 0 | 1736 |
 | 32..34 | user sample slots 1..3: header (512 bytes) then ADPCM data | 512 + data length, or 0 if empty |
 
 Reading: `BACKUP_LIST` (no arguments) stops the transport, then takes a snapshot of the runtime object and
-answers `1, rc, count` (13 since 1.0.3, 12 with FM6 up to 1.0.2, 11 before) and, per object in the order above, `id, size u32, crc u32` (CRC-32, zlib). The other objects are read as
+answers `1, rc, count` (18 with OPX's ids 10..14, 13 since 1.0.3, 12 with FM6 up to 1.0.2, 11 before) and, per object in the order above, `id, size u32, crc u32` (CRC-32, zlib). The other objects are read as
 they are in RAM or flash. Then `BACKUP_GET` reads an object in pieces: `id, offset u32, count lo, count hi`
 (count 1..256, LSB first 7 bit pair) answers `id, rc, offset u32, count lo, count hi` and the data as pack7. Check each object's CRC
 against the list; if it differs the device changed, so start again.
@@ -863,6 +866,26 @@ earlier objects restored; the file is still the source.
 
 `BACKUP_LIST` answers `1, rc, 0` when rc is not 0. `GET` and `PUT` answer id 127 when they got no arguments.
 A `LIST` replaces the snapshot, and a `PUT` begin ends it: a `GET` after a begin gets rc 5.
+
+## OPX patches (121, 122; OPX fork 0.2)
+
+INFO ends with `4F 01 version size_lo size_hi factories engine`: the record's format version (2), its size (337, two
+7-bit bytes), the factory patches (7) and the OPX engine's number (15). A patch travels as its packed record
+(`tools/opx_patch_spec.py`; the web editor's `web/opx_fields.js` is generated from it), pack7 as `BACKUP_GET`'s data.
+
+| Command | Arguments | Reply |
+| --- | --- | --- |
+| 121 OPX_GET | target, index | target, index, rc, then (rc 0) the record, pack7 (386 bytes) |
+| 122 OPX_PUT | target, index, the record, pack7 | target, index, rc |
+
+Targets: 0 a track's patch (index 0..3), 1 a factory patch (0..6, `OPX_GET` only), 2 a user preset's patch (0..31,
+an OPX user preset). rc: 0 ok; 1 a bad request (target, index, the record's length or version, a field above its range);
+2 none (a user preset with no OPX patch, or a `PUT` to a slot that is not an OPX preset, or a flash error); 3 stop
+playback first (a user preset's `PUT` writes flash); 4 no room (16 OPX user presets keep a patch). A `PUT` to a track
+plays at once and makes the patch the track's own (SLOT OWN; a factory patch unchanged shows as its F n).
+
+A user preset's record goes first (`UP_PUT`), its patch second (`OPX_PUT` target 2); the web editor's library does both,
+and reads both (`UP_GET`, `OPX_GET`).
 
 ## FM6 patches (68-71)
 

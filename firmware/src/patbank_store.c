@@ -280,6 +280,28 @@ static void pb_convert_all(void)                        /* power-on (project.c a
     for (s = 0; s < PB_NSTORE; s++)
         (void)pb_store_convert(s);
 }
+/* store s's sixth object holds nothing of the sequence banks, so that the OPX engine may write it (opx_store.c, a backup
+ * restore): the store is in the sparse format, or has no old meta object to lose. 0 when the old one is still there (the
+ * conversion at power-on failed: nothing is written over it; the next power-on tries again). Looks through st_view: the
+ * callers' buffers (pb_wire is proj_wire: a backup's chunk is in it) are not touched */
+static int pb_sixth_free(uint32_t s)
+{
+    static uint8_t ok;
+    uint32_t len;
+    const uint8_t *v;
+    if ((ok >> s) & 1u)
+        return 1;
+    v = st_view(OBJ_PB0 + s * PB_NOBJ + PB_META_O, &len);
+    if (v && len >= PB_META_FIX && v[0] == 'P' && v[1] == 'B' && v[2] == PB_FMT && v[3] == PB_META_O) {
+        ok |= (uint8_t)(1u << s);
+        return 1;
+    }
+    v = st_view(OBJ_PB0 + s * PB_NOBJ + PB_OLD_META_O, &len);
+    if (v && len >= PB_OLD_META_FIX && v[0] == 'P' && v[1] == 'B' && v[2] >= 1 && v[2] <= 3 && v[3] == PB_OLD_META_O)
+        return 0;
+    ok |= (uint8_t)(1u << s);
+    return 1;
+}
 /* store s's meta object -> pb_wire (an old store is converted first): its length, or -1 */
 static int pb_meta_for(uint32_t s)
 {

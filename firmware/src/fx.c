@@ -661,8 +661,8 @@ static __attribute__((noinline)) void rev_side_mix(int32_t *l, int32_t *r, uint3
  *   FLANG CHOR           RATE, DEPTH, FDBK: a 256-sample line per track (5.8 ms); FLANG swept 0.25 .. 5 ms (the FX
  *                        layer's squared triangle), feedback 0 .. 0.85; CHOR a sine around 3.2 ms (+-2.3 ms at DEPTH
  *                        127), feedback 0 .. 0.4. A DC blocker on the swept copy (a clipped loud input is lopsided).
- *   GRAIN                SIZE (a grain's length, 5 .. 93 ms, IG_SIZE), PITCH (-12 .. +12 semitones, IG_RATIO), SPRAY (how far back
- *                        in the last 186 ms a grain may start: 0 the newest sound, 127 anywhere): a granular cloud, free
+ *   GRAIN                SIZE (a grain's length, 2.5 .. 46 ms, IG_SIZE), PITCH (-12 .. +12 semitones, IG_RATIO), SPRAY (how far back
+ *                        in the last 93 ms a grain may start: 0 the newest sound, 127 anywhere): a granular cloud, free
  *                        running (a Hann-windowed grain of the recent past every half a grain, two at most; the position
  *                        of each from its count, hashed: the same every start). The track is recorded into the
  *                        SLICER's buffer (sl_buf) while it runs, so STUT repeats nothing then (slicer.c ins_gr); GATE as
@@ -705,7 +705,7 @@ typedef struct {
         uint8_t on;
     } g[2];
 } ins_t;
-#define CL_LEN 2048u                    /* COMB: its line, samples: half of the track's SLICER buffer (sl_buf) */
+#define CL_LEN 1024u                    /* COMB: its line, samples: half of the track's SLICER buffer (sl_buf; Argo: 2048 before it was halved): the lowest tone 43 Hz */
 static ins_t ins[NTRK] __attribute__((section(".pool")));
 
 static inline int32_t ins_mixq(int32_t m) { return m >= 127 ? 32768 : m <= 0 ? 0 : m * 258; }   /* MIX -> Q15 */
@@ -876,10 +876,10 @@ static __attribute__((noinline)) void ins_tape(ins_t *s, const track_t *t, int32
 }
 
 /* GRAIN: PITCH -12 .. +12 semitones (P_IB in 25 even parts) as Q8 ratios of the ring's own rate (256); SIZE (P_IA in 16
- * even parts): a grain's length in 44.1 kHz samples, 5 .. 93 ms (params.c N_ISIZE / N_IPITCH name them) */
+ * even parts): a grain's length in 44.1 kHz samples, 2.5 .. 46 ms (params.c N_ISIZE / N_IPITCH name them) */
 static const uint16_t IG_RATIO[25] = {128, 136, 144, 152, 161, 171, 181, 192, 203, 215, 228, 242, 256, 271, 287, 304, 323,
                                       342, 362, 384, 406, 431, 456, 483, 512};
-static const uint16_t IG_SIZE[16] = {220, 267, 325, 395, 480, 583, 709, 861, 1047, 1272, 1546, 1879, 2283, 2775, 3372, 4096};
+static const uint16_t IG_SIZE[16] = {110, 133, 162, 197, 240, 291, 354, 430, 523, 636, 773, 939, 1141, 1387, 1686, 2048};
 
 /* a new grain on a free voice; 0: none free (SIZE turned down while the long ones sound: no cut of a sounding grain) or not enough
  * recorded yet, to be tried again soon. lout its length, r its ratio (Q8), spray 0 .. 127 */
@@ -890,8 +890,8 @@ static uint32_t ig_spawn(ins_t *s, uint32_t lout, uint32_t r, uint32_t spray)
     h *= 2246822519u;
     h ^= h >> 13;
     s->gn++;
-    if (lout > (3600u << 9) / r)
-        lout = (3600u << 9) / r;                        /* (a fast grain reads more of the ring than a long one has) */
+    if (lout > (1800u << 9) / r)
+        lout = (1800u << 9) / r;                        /* (a fast grain reads more of the ring than a long one has) */
     lb = lout * r >> 9;                                 /* the ring samples it reads (at half the output rate, times the ratio) */
     grow = lout / 2u > lb ? lout / 2u - lb : 0u;        /* its start, this far behind the write position. The gap moves by (what */
     lo = lb + 96u;                                      /* the ring gains - what the grain reads) over the grain: it shrinks for a */
@@ -1076,7 +1076,7 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
 {
     int32_t *d = SPREAD_BUF(t);
     uint32_t i;
-    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN], s = (t->p[P_SPRD] + 1) >> 1;
+    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN], s = T_WIDE(t) ? 64 : (t->p[P_SPRD] + 1) >> 1;
     int32_t pa = clamp(pan - s, -64, 63), pb = clamp(pan + s, -64, 63);
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
@@ -1115,7 +1115,7 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
  * when built, nothing when retired. An estimate: it only steers the split, the sound does not depend on it */
 #if FELUCCA_CPU2
 static uint16_t part_cost[NTRK];                        /* the last block's, per part */
-static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, FELUCCA_SAMPLE ? 70 : 0, 174, 144, 143, FELUCCA_GRAIN ? 189 : 0, 309, 113, 134,
+static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, FELUCCA_SAMPLE ? 70 : 0, 174, 144, FELUCCA_OPX ? 333 : 0, FELUCCA_GRAIN ? 189 : 0, 309, 113, 134,
                                              181,
                                              FELUCCA_SLICE ? 129 : 0,   /* (SAMPLE, GRAIN, SLICE: 0 when retired) */
 #if FELUCCA_SHDRUM
@@ -1131,7 +1131,7 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 #if FELUCCA_WAVETONE
                                              178    /* WAVETONE (host ns per voice, tests/wavetone_test.c: ANALOG 9.9, FMTONE 11.2, WAVETONE 14.5; the same fit) */
 #endif
-};
+};   /* (slot 7, OPX: 333, four operators, per-operator envelopes and an effect chain: tests/opx_test.c, 1.84 x FM6 on the host; the same fit) */
 #endif
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
@@ -1145,7 +1145,9 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #endif
     mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
     T_SPREAD(t) = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
+    T_WIDE(t) = 0;                                      /* (OPX: the engine's effects may make two channels: voice.c track_render) */
 #if FELUCCA_CPU2
+    c1_core[(uint32_t)(t - trk) % NPART] = sm != &mx[0];     /* (this part's scratch copies: C1_CI) */
     nr = track_render(t, b, n);
     part_cost[(uint32_t)(t - trk) % NTRK] = (uint16_t)(nr * ENG_VCOST[t->engine % NENGINES] + (nr || t->tail ? 60u : 0u));
     if (nr)
@@ -1154,7 +1156,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #endif
         t->tail = t->p[P_ITYPE] == IT_GRAIN || t->p[P_ITYPE] == IT_COMB ? 255 : t->p[P_ITYPE] ? 64 : 16;   /* blocks of DIST / INSERT state to run out
                                                          * after the last voice (the INSERT's: 46 ms, a flanger's
-                                                         * feedback; GRAIN: 184 ms, the ring's 186 ms of what it heard) */
+                                                         * feedback; GRAIN: 184 ms, the ring's 93 ms of what it heard) */
     else if ((!t->tail || !(t->p[P_DIST] | t->p[P_ITYPE]) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])

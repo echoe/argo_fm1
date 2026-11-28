@@ -61,6 +61,12 @@ _Static_assert(NSTEP >= 64 && NSTEP <= 128 && NSTEP % 32 == 0, "NSTEP: 64..128 (
                                             * second core (mod.c, voice.c SPREAD, eng_formant.c): one each with two cores,
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
+/* The copies of scratch a render needs one of for each core (the OPX engine's: ~1.6 KB a copy): two parts render at once at most,
+ * one on each core, and a core's parts one after the other. c1_core[k]: the core part k renders on this block (fx.c mix_part
+ * writes it first; 0 for a render that does not come through it: the host tests, one core) */
+#define C1_NC (FELUCCA_CPU2 ? 2 : 1)
+static uint8_t c1_core[NPART];
+#define C1_CI(t) ((uint32_t)c1_core[(uint32_t)((t) - trk) % NPART] % C1_NC)   /* the core's copy */
 #ifndef FELUCCA_SHDRUM
 #define FELUCCA_SHDRUM (!FELUCCA_FM4)   /* the SHDRUM engine (eng_shdrum.c), engine 14, after SLICE; FELUCCA_SHDRUM=0 builds without it (and
                                   * FELUCCA_FM4=1 does: the DIGITAL engine's key in the EDIT layer leaves no white key for a 15th).
@@ -86,7 +92,13 @@ _Static_assert(NSTEP >= 64 && NSTEP <= 128 && NSTEP % 32 == 0, "NSTEP: 64..128 (
 #if FELUCCA_WAVETONE && !FELUCCA_FMTONE
 #error "FELUCCA_WAVETONE is engine 17 and needs the FMTONE engine (16): build with FELUCCA_FMTONE=1, or FELUCCA_WAVETONE=0"
 #endif
-#define NENGINES (14 + FELUCCA_SHDRUM + FELUCCA_SWARM + FELUCCA_FMTONE + FELUCCA_WAVETONE)   /* 0..13 always (a retired one is a gone slot: ENG_FM4_GONE), then SHDRUM (14), SWARM (15), FMTONE (16): the other engines keep their numbers */
+#include "opx_map.h"       /* FELUCCA_OPX (the OPX engine) and where its data lives */
+#if FELUCCA_OPX && !FELUCCA_PATBANK
+#error "FELUCCA_OPX keeps its patches in the sequence banks' sixth objects (patbank_store.c): build with FELUCCA_PATBANK=1, or FELUCCA_OPX=0"
+#endif
+#define NENGINES (14 + FELUCCA_SHDRUM + FELUCCA_SWARM + FELUCCA_FMTONE + FELUCCA_WAVETONE)   /* 0..13 always (a retired one is a gone slot: ENG_FM4_GONE), then SHDRUM (14), SWARM (15), FMTONE (16), WAVETONE (17): the other engines keep their numbers */
+#define ENGI_OPX 7u              /* the OPX engine (eng_opx.c): WHEEL's slot 7 (the number stays: stored projects and presets keep pointing at it;
+                                  * WHEEL is no longer built). FELUCCA_OPX=0 builds without it: slot 7 is then a retired one (ENG_FM4_GONE) */
 #ifndef FELUCCA_ADPCM
 #define FELUCCA_ADPCM 0          /* Felucca 1.8's ADPCM engine (eng_adpcm.c) stays out of Argo: engine number 14 is SHDRUM here (the numbers are
                                   * stored), so it would need renumbering to 18 (after WAVETONE) first, and a ported test/favourites row */
@@ -95,7 +107,7 @@ _Static_assert(NSTEP >= 64 && NSTEP <= 128 && NSTEP % 32 == 0, "NSTEP: 64..128 (
 #error "FELUCCA_ADPCM is not ported to Argo's engine numbers (14 is SHDRUM): see core.h"
 #endif
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
+#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_SLICE - !FELUCCA_OPX)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 48u             /* user presets (upreset.c; 1.7.1: 32 before) */
 

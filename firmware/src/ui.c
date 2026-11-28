@@ -452,11 +452,22 @@ static int page_visible(uint32_t i)
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].fam == FAM_EDIT && PAGES[i].scope == SC_ENGINE && PAGES[i].id[0] == P_E4)   /* EDIT 2: not LEAD's (its MIX and FILTER pages hold E4..E7) */
-        return TSEL->eng_req % NENGINES != ENGI_LEAD;
+        return TSEL->eng_req % NENGINES != ENGI_LEAD && !(FELUCCA_OPX && TSEL->eng_req % NENGINES == ENGI_OPX);   /* (OPX: ALGO in place of it) */
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)
         return TSEL->eng_req % NENGINES == ENGI_FM6;
+    if (PAGES[i].graph >= GR_OPXL && PAGES[i].graph <= GR_OPXF)   /* (OPX fork: OPERATORS, ENVELOPE, OP LEVELS, OP MIX, EG1, LFO1) */
+        return FELUCCA_OPX && TSEL->eng_req % NENGINES == ENGI_OPX;
+#if FELUCCA_OPX
+    if (PAGES[i].fam == FAM_EDIT && PAGES[i].scope == SC_TRACK &&   /* (OPX fork) VOICE, VOICE 2, VOICE 3: an OPX track's
+                                                       * are OPERATORS' VOICE section (ui_fm6op.c XS_VOICE) */
+        (PAGES[i].id[0] == P_VOICE || PAGES[i].id[0] == P_ALLOC || PAGES[i].id[0] == P_SPRD))
+        return TSEL->eng_req % NENGINES != ENGI_OPX;
+    if (PAGES[i].scope == SC_ENGINE)                  /* (OPX fork) an OPX track: ALGO (ALG ATK DEC SLOT) in place of EDIT
+                                                       * 1 / 2 (their E3..E6 are Felucca's macros, off); the others: not ALGO */
+        return (TSEL->eng_req % NENGINES == ENGI_OPX) == (PAGES[i].id[0] == P_E0 && PAGES[i].id[3] == P_E7);
+#endif
 #if FELUCCA_SLICE
     if (PAGES[i].graph == GR_SLICES)
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_SLICE;
@@ -468,9 +479,13 @@ static int page_visible(uint32_t i)
              PAGES[i].id[0] <= P_FM4_LEVEL) || (FELUCCA_FM4 && TSEL->eng_req % NENGINES == ENGI_DIGITAL);
 }
 
-static uint32_t page_first(uint32_t fam)
+static uint32_t page_first(uint32_t fam)            /* the family's first page shown (OPX fork: an OPX track's EDIT
+                                                     * opens on ALGO, EDIT 1 hidden); none shown: its first */
 {
     uint32_t i;
+    for (i = 0; i < NPAGES; i++)
+        if (PAGES[i].fam == fam && page_visible(i))
+            return i;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == fam)
             return i;
@@ -903,6 +918,10 @@ static struct {
     uint8_t eng, preset, user, patn;
     uint8_t fm6_slot;            /* the track's FM6 patch and its SLOT (eng_fm6.c): an edited or a project's */
     uint8_t fm6[FP_SIZE + 1u];   /* patch is the track's own, not a factory one */
+#if FELUCCA_OPX
+    uint8_t opx_slot;            /* OPX fork: the track's OPX patch (opx_patch.c) and its SLOT, as FM6's */
+    uint8_t opx[OPX_PK_BYTES];
+#endif
     int16_t p[P_COUNT];
     step_t step[NSTEP];
     motion_store_t motion_backup; /* one track only, swaps with the shared event pool on undo */
@@ -1030,6 +1049,10 @@ static void load_begin(track_t *t, uint32_t what)
     memcpy(undo.step, t->step, sizeof undo.step);
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
     undo.fm6_slot = fm6_slot[i];
+#if FELUCCA_OPX
+    memcpy(undo.opx, opx_pk[i], OPX_PK_BYTES);
+    undo.opx_slot = opx_slot[i];
+#endif
     undo.pat = pat_sig[i];
     undo.from = pat_from[i];
     undo.from_h = pat_from_h[i];
@@ -1088,6 +1111,10 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
     memcpy(undo.step, t->step, sizeof undo.step);
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
     undo.fm6_slot = fm6_slot[i];
+#if FELUCCA_OPX
+    memcpy(undo.opx, opx_pk[i], OPX_PK_BYTES);
+    undo.opx_slot = opx_slot[i];
+#endif
     undo.pat = pat_sig[i];
     undo.from = pat_from[i];
     undo.from_h = pat_from_h[i];
@@ -1181,6 +1208,16 @@ static void undo_swap(void)
         fm6_own_ok &= (uint8_t)~(1u << tr);
         memcpy(undo.fm6, v, FP_SIZE);
         undo.fm6_slot = sl;
+#if FELUCCA_OPX
+        {
+            uint8_t o[OPX_PK_BYTES], os = opx_slot[tr];
+            memcpy(o, opx_pk[tr], OPX_PK_BYTES);
+            opx_set_pk(tr, undo.opx);
+            opx_slot[tr] = undo.opx_slot;             /* (opx_poll: the patch stays) */
+            memcpy(undo.opx, o, OPX_PK_BYTES);
+            undo.opx_slot = os;
+        }
+#endif
     }
     undo.keep = 0;                                /* the next load copies the track as it is now */
     if (t == TSEL)

@@ -12,6 +12,7 @@
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
+#include "opx_map.h"                          /* FELUCCA_OPX, where its objects live */
 #ifndef FELUCCA_PATBANK
 #define FELUCCA_PATBANK 1
 #endif
@@ -33,8 +34,18 @@
  * kind (type OBJ_FM6VB, not an st_load object); a new bank is first staged in the autosave's older copy (fm6_vbank.c).
  * The sequence banks (patbank.c, FELUCCA_PATBANK, objects OBJ_PB0 ..): 0xA0000..0xD1FFF, where the user sample slots were
  * (the build without FELUCCA_PATBANK keeps them): five stores (the four projects and the live music) of six objects. */
+/* The OPX engine's objects (OBJ_OPX0 + i, i < OPX_EXT_OBJS: opx_store.c): the sixth object of sequence bank store i (opx_map.h
+ * OPX_OBJ_ADDR). On flash each is known by a fixed tag (OPX_OBJ_TAG, st_tag), not by its place in this enum, so objects added
+ * here later do not change what the flash means (and a sequence bank object's own header never reads as an OPX one). */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
-       OBJ_AUTOSAVE, OBJ_COUNT };
+       OBJ_AUTOSAVE,
+#if FELUCCA_OPX
+       OBJ_OPX0, OBJ_OPX_END = OBJ_OPX0 + OPX_EXT_OBJS, OBJ_COUNT = OBJ_OPX_END
+#else
+       OBJ_COUNT
+#endif
+};
+_Static_assert(OBJ_COUNT <= 32u, "storage objects: below the voice bank's type (OBJ_FM6VB)");
 #define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; >= OBJ_COUNT: st_load
                                                 * never takes one, no object here takes its sectors) */
 #define OBJ_PB0 33u                            /* the sequence banks (patbank.c): store s (0..3 the projects A..D, 4 the live
@@ -75,8 +86,22 @@ static uint32_t st_crc32_add(uint32_t c, const void *p, uint32_t n)   /* zlib CR
 }
 static uint32_t st_crc32(const void *p, uint32_t n) { return ~st_crc32_add(0xFFFFFFFFu, p, n); }
 
+/* the commit record's type for obj: its enum value, except the OPX objects' fixed tags */
+static uint32_t st_tag(uint32_t obj)
+{
+#if FELUCCA_OPX
+    if (obj >= OBJ_OPX0 && obj < OBJ_OPX_END)
+        return OPX_OBJ_TAG(obj - OBJ_OPX0);
+#endif
+    return obj;
+}
+
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+#if FELUCCA_OPX
+    if (obj >= OBJ_OPX0 && obj < OBJ_OPX_END)
+        return OPX_OBJ_ADDR(obj - OBJ_OPX0, copy);
+#endif
     if (obj >= OBJ_PB0)
         return OBJ_PB_BASE + (obj - OBJ_PB0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj == OBJ_SETTINGS)
@@ -98,7 +123,7 @@ static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record 
         return -1;
     if (st_read(st_sector(obj, copy), h, sizeof *h))
         return -1;
-    if (h->magic != ST_MAGIC || h->type != obj || h->slot != copy || h->len > ST_PAYLOAD_MAX ||
+    if (h->magic != ST_MAGIC || h->type != st_tag(obj) || h->slot != copy || h->len > ST_PAYLOAD_MAX ||
         h->hcrc != st_crc32(h, sizeof *h - 4u))
         return -1;
     return 0;
@@ -181,7 +206,7 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
             return rc;
     }
     h.magic = ST_MAGIC;
-    h.type = (uint16_t)obj;
+    h.type = (uint16_t)st_tag(obj);
     h.slot = (uint16_t)to;
     h.seq = seq + 1u;
     h.len = len;
@@ -200,3 +225,4 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
 }
 
 static int st_save(uint32_t obj, const void *src, uint32_t len) { return st_save_to(obj, src, len, -1); }
+

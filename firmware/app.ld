@@ -5,18 +5,18 @@
  * 0x01C00000..0x01C06000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver), then .c1_text in it (the second core's waiting loop, bsp/chip/fm1_cpu1.h: an idle core 1 never
  * fetches from the flash); 0x01C06000..0x01C08000 stays for RAM-run debug.
- * RAM  : .data/.bss (75 KiB): what the audio and key-scan interrupts touch, small variables
+ * RAM  : .data/.bss (79 KiB): what the audio and key-scan interrupts touch, small variables
  * POOL : big zero-initialised buffers (FX lines, canvases, the parts' engine memory, the main loop's work
  *        buffers), section .pool. The same SRAM: the RAM / POOL boundary only splits the budget (1.5: 96 / 336
- *        KiB -> 72 / 360 KiB; 1.9, 128 steps a sequence: 75 / 357 KiB); tools/build.py reads both lengths from here
+ *        KiB -> 72 / 360 KiB; 1.9, 128 steps a sequence: 75 / 357 KiB; Argo, OPX: 79 / 353 KiB); tools/build.py reads both lengths from here
  * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.
  * 0x01C7FD50.. is reserved: boot_info, boot-state mailbox, vector table. */
 MEMORY
 {
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
     RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x6000
-    RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 75K
-    POOL   (rw)  : ORIGIN = 0x01C1AC00, LENGTH = 0x59400
+    RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 79K
+    POOL   (rw)  : ORIGIN = 0x01C1BC00, LENGTH = 0x58400
     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
 }
 SECTIONS

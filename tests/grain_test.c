@@ -123,7 +123,7 @@ int main(void)
     }
     {   /* it grains */
         reset(); a = run(4.0, 110, 20000, 0, 0);
-        reset(); set_ins(t, IT_GRAIN, 64, 64, 48, 127); b = run(4.0, 110, 20000, 0, 0);
+        reset(); set_ins(t, IT_GRAIN, 96, 64, 48, 127); b = run(4.0, 110, 20000, 0, 0);   /* (SIZE 96: 26 ms, the grain length 64 was before SL_LEN was halved) */
         bad += check("at MIX 127 the output is not the input", a.h != b.h);
         bad += check("its level is near the input's (0.4 .. 1.15 x the RMS)", b.rms > 0.4 * b.inrms && b.rms < 1.15 * b.inrms);
         bad += check("no DC (under 1 % of the peak)", fabs(b.dc) < 0.01 * b.inpeak);
@@ -255,9 +255,9 @@ int main(void)
         param_format(ins_desc(IT_GRAIN, 1), 127, v, &u);
         bad += check("PITCH 127 reads +12", !strcmp(v, "+12"));
         param_format(ins_desc(IT_GRAIN, 0), 64, v, &u);
-        bad += check("SIZE 64 reads 24 ms", !strcmp(v, "24") && !strcmp(u, "ms"));
+        bad += check("SIZE 64 reads 12 ms (24 before the ring was halved)", !strcmp(v, "12") && !strcmp(u, "ms"));
         param_format(ins_desc(IT_GRAIN, 0), 127, v, &u);
-        bad += check("SIZE 127 reads 93 ms (the longest, 4096 samples)", !strcmp(v, "93") && IG_SIZE[15] == 4096u);
+        bad += check("SIZE 127 reads 46 ms (the longest, 2048 samples)", !strcmp(v, "46") && IG_SIZE[15] == 2048u);
     }
     {   /* a long run */
         reset(); set_ins(t, IT_GRAIN, 100, 100, 100, 127);

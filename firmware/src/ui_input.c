@@ -1212,8 +1212,14 @@ static void edit_param(uint32_t slot, int32_t steps)
             ui.ppick = (uint8_t)clamp((int32_t)pat_pick() + steps, 0, (int32_t)pat_count() - 1);
         return;
     }
+#if FELUCCA_OPX
+    if (slot && xmat_on()) {                             /* OPX's EDIT 1 on USER: KNOB 2 3 the cell, 4 its amount */
+        xmat_knob(slot, steps);
+        return;
+    }
+#endif
     if (fop_page(pg->graph)) {                           /* FM6's operators: KNOB 1 OP, 2..4 its bytes (ui_fm6op.c) */
-        fop_knob(slot, steps);
+        fop_any_knob(slot, steps);                       /* (FM6's, or OPX's: OPX fork) */
         return;
     }
     if (pg->graph == GR_MOD && slot == 0u) {             /* MOD: KNOB 1 the slot, 2..4 its SRC DST AMT */
@@ -1460,6 +1466,12 @@ static void presets_turn(int32_t s)
     const page_t *pg = cur_page();
     uint32_t g = pg->graph;
     sset_t held = lock_held();
+#if FELUCCA_OPX
+    if (g == GR_OPXV && !ui.home && xop_ok()) {           /* (OPX fork) OP GRID: the PRESETS knob picks the row */
+        xop_grid_row_turn(s);
+        return;
+    }
+#endif
     if (detail_on()) {                                    /* DETAIL (1.5.1): the cursor (its KNOB 1 is CHANCE) */
         if (chain_busy())
             ui_message("STOP TO EDIT");
@@ -1693,6 +1705,9 @@ static void ui_input(void)
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
+#if FELUCCA_OPX
+    opx_poll();                                         /* OPX fork: SLOT turned -> its factory patch */
+#endif
 #if !FELUCCA_FM4
     for (k = 0; k < NTRK; k++)                          /* a DIGITAL sound any other way (the paths convert it */
         if (trk[k].eng_req == ENGI_DIGITAL)             /* already): FM6 (fm4_convert.c) */

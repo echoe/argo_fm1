@@ -246,12 +246,13 @@ static uint32_t engine_icon(const char *name)
         {"DIGITAL", ICON_ALGORITHM},
 #endif
         {"PHASE", ICON_PHASE}, {"LOFI", ICON_BITS},
-        {"SAMPLE", ICON_SAMPLE}, {"VOICE", ICON_MOUTH}, {"TRIO", ICON_TRIO}, {"WHEEL", ICON_DRAWBAR},
+        {"SAMPLE", ICON_SAMPLE}, {"VOICE", ICON_MOUTH}, {"TRIO", ICON_TRIO},
         {"SLICE", ICON_SLICE},
         {"GRAIN", ICON_GRAIN},
         {"PHYS", ICON_PHYS},
         {"DRUM", ICON_DRUM},
         {"SHDRUM", ICON_DRUM},
+        {"OPX", ICON_ALGORITHM},              /* OPX (WHEEL's slot) */
         {"NOISE", ICON_NOISE},
         {"FM6", ICON_MOD},                    /* (symbol_modular: six operators patched; a glyph of its own wanted) */
         {"SWARM", ICON_DETUNE},               /* (the detuned cluster; a glyph of its own wanted) */

@@ -36,7 +36,7 @@ const html = readFileSync(join(HERE, "editor.html"), "utf8");
 const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-END*/"));
 const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
-   UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
+   UP, OPX, bank, cleanPatch, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F, LDX, SY1,
    FM4, fromDigital, fromPerc, DRUM_KIT_E,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
@@ -53,8 +53,8 @@ async function editorMock() {
   inp.onmidimessage = (e) => link.receive(e.data);
   const rq = async (r, o) => link.request(r, o);
   const info = E.parse[E.CMD.INFO](await rq(E.req.info()));
-  ok(info.nengines === 18 && info.engines[14] === "SHDRUM" && info.engines[15] === "SWARM" && info.engines[16] === "FMTONE" && info.engines[17] === "WAVETONE" && info.engines[1] === "-" && info.engines[12] === "FM6" && info.engines[13] === "-"
- && info.engines[4] === "-" && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[7] === "WHEEL" && info.engines[8] === "-" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "LEAD" && info.pcount === 114 && info.pe0 === 106,
+  ok(info.nengines === 18 && info.engines[7] === "OPX" && info.engines[14] === "SHDRUM" && info.engines[15] === "SWARM" && info.engines[16] === "FMTONE" && info.engines[17] === "WAVETONE" && info.engines[1] === "-" && info.engines[12] === "FM6" && info.engines[13] === "-"
+ && info.engines[4] === "-" && info.engines[5] === "VOICE" && info.engines[6] === "TRIO" && info.engines[8] === "-" && info.engines[9] === "PHYS" && info.engines[10] === "DRUM" && info.engines[11] === "LEAD" && info.pcount === 114 && info.pe0 === 106,
     "editor: INFO");
   let descs = 0;
   for (let i = 0; i < info.pcount; i++) if (E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))).label) descs++;
@@ -158,9 +158,9 @@ async function editorMock() {
   ok(!prefs.favorites[info.nengines][31] && !E.devicePresetRows(info, names, prefs).some((r) => r.user), "editor: erased slot disappears and loses star");
   {   /* the lists in the device's order (engines.c ENGINE_ORDER): FM6 second, SHDRUM last, "-" never; the numbers stay */
     const shown = E.engineOrder(info.engines).map((i) => info.engines[i]);
-    ok(shown.join() === "ANALOG,FM6,PHASE,LOFI,VOICE,TRIO,WHEEL,PHYS,LEAD,DRUM,SHDRUM,SWARM,FMTONE,WAVETONE" &&
+    ok(shown.join() === "ANALOG,FM6,PHASE,LOFI,VOICE,TRIO,OPX,PHYS,LEAD,DRUM,SHDRUM,SWARM,FMTONE,WAVETONE" &&
        E.engineOrder(info.engines)[1] === 12 && E.engineOrder(info.engines)[9] === 10 && E.engineOrder(info.engines)[10] === 14 && E.engineOrder(info.engines)[12] === 16 && E.engineOrder(info.engines)[13] === 17,
-       "editor: engines listed FM6 second, FMTONE last (indices kept)");
+       "editor: engines listed FM6 second, OPX in WHEEL's place after TRIO (indices kept)");
     ok(E.engineOrder(["ANALOG", "X", "-", "DRUM", "FM6"]).join() === "0,4,3,1", "editor: an unknown engine follows the known ones");
     m.state.favorites[10][0] = m.state.favorites[12][0] = true;
     await rq(E.req.uiSet(3, 0));
@@ -1674,11 +1674,36 @@ async function editorSessions() {
   ok(!sent && S.count() === 0, "editor: library storage delay cannot send a save to a new device");
 }
 
+/* OPX: INFO's 4F block, OPX_GET / OPX_PUT (pack7), a user preset and the current sound carrying the OPX patch */
+async function editorOpx() {
+  const fac = Array.from({ length: 8 }, (_, k) => Uint8Array.from({ length: 337 }, (_, i) => (i * 7 + k * 31) & 255));
+  const { m, rq, done } = attachMock({ opx: { engine: 7, factory: fac } });
+  const C = E.CMD;
+  const info = E.parse[C.INFO](await rq(E.req.info()));
+  ok(info.opx && info.opx.version === 2 && info.opx.bytes === 337 && info.opx.factory === 8 && info.opx.engine === 7,
+    "editor: INFO's OPX block (version, record size, factory patches, engine)");
+  let g = E.parse[C.OPX_GET](await rq(E.req.opxGet(E.OPX.TARGET.FACTORY, 3)));
+  ok(!g.rc && g.packed.length === 337 && g.packed.every((x, i) => x === fac[3][i]), "editor: OPX_GET a factory patch: 337 bytes, 8-bit, pack7");
+  const mine = Uint8Array.from({ length: 337 }, (_, i) => (255 - i) & 255);
+  const r = E.parse[C.OPX_PUT](await rq(E.req.opxPut(E.OPX.TARGET.TRACK, 2, mine)));
+  g = E.parse[C.OPX_GET](await rq(E.req.opxGet(E.OPX.TARGET.TRACK, 2)));
+  ok(!r.rc && !g.rc && g.packed.every((x, i) => x === mine[i]), "editor: OPX_PUT a track's patch, OPX_GET reads it back");
+  const pt = { name: "OPX ONE", engine: 7, p: Array(info.pcount).fill(0), pattern: null, grid: null, opx: mine };
+  const rc = await E.bank.put(rq, 4, pt, info);
+  const u = await E.bank.get(rq, info, 4);
+  ok(!rc && u.used && u.engine === 7 && u.opx && u.opx.every((x, i) => x === mine[i]),
+    "editor: a user preset of an OPX sound goes to the device and comes back with its patch");
+  const c = E.cleanPatch({ ...pt, opx: u.opx });
+  ok(c.opx.length === 337 && c.opx.every((x, i) => x === mine[i]) && !E.cleanPatch({ ...pt, opx: [1, 2] }).opx,
+    "editor: the library keeps an OPX sound's patch (337 bytes; anything else dropped)");
+  done();
+}
+
 function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 9 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 10 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
@@ -1896,6 +1921,7 @@ await editorFm6();
 await editorLdx();
 await editorFm6Bank();
 await editorMidiLearn();
+await editorOpx();
 fm6TabNoBank();
 await editorFm4();
 editorTabs();

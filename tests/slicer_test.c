@@ -254,14 +254,15 @@ static int test_off_stut(void)
         same &= !memcmp(b, c, sizeof b);
     }
     bad += check("OFF: the signal is not touched", same);
-    /* STUT, pattern 7 (x...), 1/16 at 120 BPM, 100 %: the repeat steps play the live step again */
-    set_slicer(t, SL_STUT, 7, 1, 127);
+    /* STUT, pattern 7 (x...), 1/32 at 120 BPM (62.5 ms: the recording, SL_LEN, is 93 ms since the Argo OPX build halved it; a longer
+     * step repeats its first half or quarter, as slicer.c always did for one over the recording), 100 %: the repeat steps play the live step again */
+    set_slicer(t, SL_STUT, 7, 2, 127);
     slicer_start();
     {
         static int32_t in[4u * 44100u], out[4u * 44100u];
-        uint32_t len = (uint32_t)FS * 60u / 120u / 4u;
+        uint32_t len = (uint32_t)FS * 60u / 120u / 8u;
         for (f = 0; f < sizeof in / sizeof in[0]; f++)
-            in[f] = out[f] = (int32_t)(12000.0 * sin(2 * M_PI * 150.0 * f / FS));   /* 18.75 periods a step */
+            in[f] = out[f] = (int32_t)(12000.0 * sin(2 * M_PI * 150.0 * f / FS));   /* 9.4 periods a step */
         for (f = 0; f + CTL <= sizeof in / sizeof in[0]; f += CTL)
             slicer_track(t, out + f, CTL);
         for (f = 0; f + 4u * len < sizeof in / sizeof in[0]; f += 4u * len)   /* steps 1..3 of every 4 = step 0 */

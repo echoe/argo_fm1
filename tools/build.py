@@ -110,6 +110,8 @@ def generate():
         cmds.append([tools / "gen_samples.py", GEN / "felucca_samples.h"])
     if os.environ.get("FELUCCA_ADPCM") == "1":   # the ADPCM engine's waves (off in Argo: core.h)
         cmds.append([tools / "gen_adpcm.py", GEN / "felucca_adpcm.h"])
+    if os.environ.get("FELUCCA_OPX") != "0":     # the OPX engine's patch layout (opx_patch.c includes it; FELUCCA_OPX=0: none)
+        cmds.append([tools / "opx_patch_spec.py", "--emit-c", GEN / "opx_fields.h"])
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -207,7 +209,7 @@ def build_app():
     flags = [*CFLAGS, *HAL_INC, "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_UAC_TONE", "FELUCCA_UAC_48K", "FELUCCA_ICONS", "FELUCCA_SMPENG", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_SLICE", "FELUCCA_PATBANK", "FELUCCA_FM4",
-                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_ADPCM"):
+                 "FELUCCA_CDC_DEFAULT", "FELUCCA_UAC_AS_FIRST", "FELUCCA_CPU2", "FELUCCA_ADPCM", "FELUCCA_OPX"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

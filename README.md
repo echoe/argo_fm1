@@ -40,7 +40,7 @@ NOTE: If you are worried about breaking your FM-1, I recommend installing [M-Boo
 - Build: [BUILDING.md](BUILDING.md)
 - Projects that this firmware uses:
 - - [Felucca](https://github.com/hugelton/Felucca) (Where it all began, this firmware would not exist at all without it. I literally make releases in sync with the Felucca versions ... when I can/care.)
-- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained. Argo builds all but NOISE)
+- - [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, MIT; still maintained. Argo builds all but NOISE and WHEEL)
 - - [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca, and by extension Argo, builds on it from 1.7.0)
 - - [Mini-tone](https://github.com/eldontyrellcorp/Mini-Tone) (the SWARM, FM-TONE, and WAVETONE engines)
 - - [Jiant](https://github.com/juanjiant-bit/JIANT) (the DRUM-X engine)
@@ -190,7 +190,7 @@ The synths in common with Felucca are:
 - LOFI - low-fidelity chiptune synth
 - VOCAL - simple formant synth
 - TRIO - three-oscillator synth
-- WHEEL - organ
+- OPX - four-operator FM, one operator to a knob (replaces WHEEL, the organ, in the same engine slot)
 - PHYS - Braids engines reworked into a physical modeling synth
 
 Synths from other firmwares are:
@@ -273,6 +273,7 @@ If you don't know why something is happening to your sound, there are a few plac
 - If you want to, e.g., lock an FX, set FX Latch mode to ON in the second page of the Menu. FX settings (including DJ mode) will remain on with that.
 
 ## Changelog
+- 1.8.7 - OPX, a four-operator FM engine (opsix-style, one operator to a knob; its patches saved in the spare sixth flash objects, docs/OPX_STORAGE.md), takes over the WHEEL organ engine's slot (engine 7). Projects and user presets saved with WHEEL load as OPX (their organ knob values are read as OPX's, so re-pick a sound); re-save them. To make room the slicer's per-track buffer (shared by STUT, the GRAIN and COMB inserts and the FX layer's loop) is half as long, 93 ms: GRAIN SIZE reads 2.5 .. 46 ms (a saved SIZE value keeps its place, so it sounds half as long), COMB's lowest tone is 43 Hz, STUT repeats at most 93 ms of a step, and the FX layer's loop is 186 ms: REPEAT 1/8 and REVERSE (1/8) need 162 BPM or more, 1/16 81, 1/32 41; DJ LOOP's LENGTH runs 186 .. 12 ms; RAM / pool split 79 / 353 KiB (app.ld).
 - 1.8.6 - Sequence banks store notes in list format. 128 steps/pattern but it has to be lossy - there's % in the top right that says how filled the patterns are. LEAD engine updates to make the engine more accurate and well laid out. More functional synth1 preset import to LEAD presets. DJFX knob direction bugfix. Argo MIDI advertisement.
 - 1.8.5 - chorus is now juno-style, added comb filter insert effect, added DJFX-style loop mode to FX page, SEQ switch display fix, letting preset swaps be set to AUTO mode and not LOCK
 - 1.8.4 - killing the final instances of web editor and installer saying other synths (hopefully), adding new LEAD synth, tweaking website to use LOOM-8's code where convenient

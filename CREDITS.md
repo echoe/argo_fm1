@@ -8,7 +8,7 @@ thanks the work below; each keeps its own licence (see [LICENSE](LICENSE), [LICE
 - **[Hügelton Instruments](https://hugelton.com)** (Leo Kuroshita, [@kurogedelic](https://github.com/kurogedelic)):
   Felucca itself; the DRUM voices and kits; the Hügelton Sample
   Pack (the drum samples, CC0 1.0); the [Fukiai](https://github.com/hugelton/Fukiai) icon
-  font ([MIT](LICENSES/MIT-Fukiai.txt)); the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (Argo builds all but NOISE)
+  font ([MIT](LICENSES/MIT-Fukiai.txt)); the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (Argo builds all but NOISE and WHEEL)
   ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines), [MIT](LICENSES/MIT-Felucca-Engines.txt))
 - Synth1 patch import (`.sy1`, the web editor's LEAD tab): the measured tables are from [fm1-sy1](https://github.com/fenderberg/fm1-sy1) by fenderberg ([MIT](LICENSES/MIT-fm1-sy1.txt)), themselves [oxo_synth2](https://github.com/chab/oxo_synth2)'s measurements of Synth1 (MIT; `tools/gen_sy1_tables.py`)
 - Font: [Inter Tight](https://github.com/rsms/inter-tight) by The Inter Project Authors, [SIL OFL 1.1](LICENSES/OFL-InterTight.txt)
